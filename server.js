@@ -5,6 +5,8 @@
 const express = require("express");
 const http = require("http");
 const path = require("path");
+const fs = require("fs");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 const { makeCase } = require("./cases");
 const { judgeVerdict } = require("./judge");
@@ -14,6 +16,55 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, "public")));
+app.use(express.json({ limit: "64kb" }));
+
+/* ---------- Judge Djinn Ra's AI voice (ElevenLabs) ----------
+   POST /api/say { text } -> MP3 audio of the judge speaking.
+   Uses Leon's cloned voice when JUDGE_VOICE_ID is set, otherwise a
+   deep male stock voice. Needs ELEVENLABS_API_KEY env var.
+   Responses are cached on disk by (voice, text) hash. */
+const VOICE_CACHE = path.join(__dirname, ".voice-cache");
+try { fs.mkdirSync(VOICE_CACHE, { recursive: true }); } catch (_) {}
+const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // deep male stock voice; replaced by Leon's clone
+
+app.post("/api/say", async (req, res) => {
+  const text = String((req.body && req.body.text) || "").slice(0, 1200);
+  if (!text.trim()) return res.status(400).json({ error: "no-text" });
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: "no-voice-key" });
+  const voiceId = process.env.JUDGE_VOICE_ID || DEFAULT_VOICE_ID;
+  const hash = crypto.createHash("sha1").update(voiceId + ":" + text).digest("hex");
+  const file = path.join(VOICE_CACHE, hash + ".mp3");
+  if (fs.existsSync(file)) {
+    res.set("Content-Type", "audio/mpeg");
+    return res.sendFile(file);
+  }
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + voiceId, {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: { stability: 0.45, similarity_boost: 0.8, style: 0.4, use_speaker_boost: true },
+      }),
+    });
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      return res.status(502).json({ error: "tts-failed", detail: detail.slice(0, 200) });
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    try { fs.writeFileSync(file, buf); } catch (_) {}
+    res.set("Content-Type", "audio/mpeg");
+    res.send(buf);
+  } catch (e) {
+    res.status(502).json({ error: "tts-error" });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 const ARGUE_SECONDS = 75;
