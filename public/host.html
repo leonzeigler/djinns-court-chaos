@@ -310,7 +310,7 @@ async function speak(text) {
       if (judgeAudio.src.startsWith("blob:")) URL.revokeObjectURL(judgeAudio.src);
     }
     voiceMode = "ai";
-    voiceStatus.textContent = "🔥 Leon's voice (AI judge)";
+    voiceStatus.textContent = "🔥 AI judge voice";
     judgeAudio.src = url;
     if (audioCtx.state === "suspended") await audioCtx.resume();
     await judgeAudio.play();
