@@ -1,4 +1,4 @@
-# ⚖️ Djinn's Court Chaos
+# ⚖️ Hood Court
 
 A party game for your Discord game nights. You host the courtroom on your
 stream/TV, players join from their phones with a room code or QR scan —

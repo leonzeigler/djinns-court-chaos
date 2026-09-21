@@ -1,4 +1,4 @@
-// Case generator for Djinn's Court Chaos.
+// Case generator for Djinn's Hood Court.
 // Each case is an absurd "crime" for the Plaintiff and Defendant teams to argue over.
 // No AI needed here — pure template comedy.
 

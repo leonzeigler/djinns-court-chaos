@@ -1,4 +1,4 @@
-// Judge Djinn Ra's verdict engine for Djinn's Court Chaos.
+// Judge Djinn Ra's verdict engine for Djinn's Hood Court.
 //
 // Template-based verdicts in Djinn Ra's voice: confident, theatrical,
 // gold-dread energy. Reads the actual arguments submitted and weaves

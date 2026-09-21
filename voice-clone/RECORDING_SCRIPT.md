@@ -1,4 +1,4 @@
-# Judge Djinn Ra — Voice Recording Script
+# 🎙️ Judge Djinn Ra — Voice Recording Script
 
 **Goal:** 1–3 minutes of YOUR voice so the game can clone it and make the judge sound like you.
 

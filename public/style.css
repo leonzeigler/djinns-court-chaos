@@ -1,4 +1,4 @@
-/* Djinn's Court Chaos — black & gold courtroom theme */
+/* Djinn's Hood Court — black & gold courtroom theme */
 :root {
   --gold: #f5c518;
   --gold-deep: #b8860b;
@@ -25,19 +25,41 @@ body {
 .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; }
 
 header.brand { text-align: center; margin: 10px 0 22px; }
-header.brand h1 {
+/* Fancy gold game title — Cinzel, the same display font used in
+   Djinn's Handyman & Cleaning advertising. */
+header.brand h1.game-title {
   margin: 0;
-  font-size: clamp(26px, 5vw, 46px);
-  letter-spacing: 2px;
-  color: var(--gold);
-  text-shadow: 0 0 24px rgba(245, 197, 24, 0.35);
+  font-family: "Cinzel", "Times New Roman", serif;
+  font-weight: 900;
+  font-size: clamp(30px, 6vw, 54px);
+  letter-spacing: 3px;
+  background: linear-gradient(180deg, #fff6d8 0%, #f5c518 38%, #a67c00 62%, #f5c518 85%, #7a5a06 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1px #5e470a;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 24px rgba(245, 197, 24, 0.35));
 }
+header.brand h1.game-title .scales { -webkit-text-stroke: 0; }
 header.brand .sub {
   color: var(--muted);
   letter-spacing: 3px;
   font-size: 13px;
   margin-top: 6px;
   text-transform: uppercase;
+}
+/* Business typography: Cinzel — the Djinn's Handyman & Cleaning display
+   font — on every heading and display element. Body copy (arguments,
+   verdicts, chat) stays in the clean sans so it stays easy to read. */
+h1, h2, h3,
+.btn,
+label,
+.room-code,
+.timertext,
+.winner-banner,
+.score .n,
+.case-card .ctitle {
+  font-family: "Cinzel", "Times New Roman", serif;
 }
 
 .panel {
@@ -140,9 +162,12 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
 .judge-stage { text-align: center; }
 .judge-stage img {
   width: min(300px, 60vw);
-  border-radius: 18px;
-  border: 3px solid var(--gold);
-  box-shadow: 0 0 50px rgba(245, 197, 24, 0.35);
+  /* Frameless cutout: no border, no rounded box, no frame shadow.
+     The drop-shadow follows the figure's silhouette instead. */
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 0 26px rgba(245, 197, 24, 0.35));
   animation: judge-idle 4.5s ease-in-out infinite;
   transform-origin: 50% 80%;
 }
@@ -154,8 +179,7 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
 /* ...golden aura + voice-driven bounce while delivering a verdict. */
 .judge-stage img.talking {
   animation: none;
-  border-color: #ffe27a;
-  box-shadow: 0 0 70px rgba(245, 197, 24, 0.65);
+  filter: drop-shadow(0 0 44px rgba(245, 197, 24, 0.65));
 }
 /* Gavel slam when the verdict lands. */
 @keyframes gavel-shake {

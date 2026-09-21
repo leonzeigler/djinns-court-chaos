@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Original Arabic-flavored hip-hop loop for Djinn's Court Chaos.
+Original Arabic-flavored hip-hop loop for Hood Court.
 100% composed in code — no samples, no copyright issues. Leon owns it outright.
 
 Vibe: dark, driving, Middle Eastern-inflected hip-hop (in the spirit of the

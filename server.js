@@ -1,4 +1,4 @@
-// Djinn's Court Chaos — game server.
+// Djinn's Hood Court — game server.
 // Host screen + phones join via room code. Judge Djinn Ra delivers verdicts.
 // Run: npm install && npm start  →  host: http://localhost:3000/host.html
 
@@ -164,17 +164,23 @@ io.on("connection", (socket) => {
       scores: { plaintiff: 0, defendant: 0 },
       timer: null,
       deadline: null,
+      hostGoneTimer: null, // grace period for host re-attach (see disconnect)
     };
     socket.join(code);
     socket.data = { code, isHost: true };
     cb({ code });
   });
 
-  // Host re-attaches after a page refresh.
+  // Host re-attaches after a page refresh (or a dropped connection).
   socket.on("host-join", ({ code }, cb) => {
     code = (code || "").toUpperCase().trim();
     const room = rooms[code];
     if (!room) return cb({ error: "Courtroom not found." });
+    // Host is back inside the grace period — cancel room deletion.
+    if (room.hostGoneTimer) {
+      clearTimeout(room.hostGoneTimer);
+      room.hostGoneTimer = null;
+    }
     room.hostId = socket.id;
     room.sockets.add(socket);
     socket.join(code);
@@ -300,8 +306,18 @@ io.on("connection", (socket) => {
       io.to(room.code).emit("players-updated", {
         players: room.players.map((p) => ({ name: p.name, team: p.team })),
       });
+    } else {
+      // The host dropped (refresh, hiccup, closed tab). Don't kill the
+      // courtroom instantly — give the host 2 minutes to re-attach.
+      if (room.hostGoneTimer) clearTimeout(room.hostGoneTimer);
+      room.hostGoneTimer = setTimeout(() => {
+        clearTimer(room);
+        delete rooms[d.code];
+      }, 120000);
     }
-    if (room.sockets.size === 0) {
+    // Only delete an empty room immediately when no host grace period
+    // is pending — otherwise the grace timer cleans it up.
+    if (room.sockets.size === 0 && !room.hostGoneTimer) {
       clearTimer(room);
       delete rooms[d.code];
     }
@@ -309,7 +325,7 @@ io.on("connection", (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`Djinn's Court Chaos live at http://localhost:${PORT}`);
+  console.log(`Djinn's Hood Court live at http://localhost:${PORT}`);
   console.log(`Host screen: http://localhost:${PORT}/host.html`);
   console.log(`Players join: http://localhost:${PORT}/join.html`);
 });

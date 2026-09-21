@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Djinn's Court Chaos — Host</title>
+<title>Djinn's Hood Court — Host</title>
 <link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="wrap">
   <header class="brand">
-    <h1>⚖️ DJINN'S COURT CHAOS</h1>
+    <h1 class="game-title"><span class="scales">⚖️</span> DJINN'S HOOD COURT</h1>
     <div class="sub">Judge Djinn Ra presiding</div>
     <button id="btn-music" class="btn small ghost" style="margin-top:8px">🎵 Music: Off</button>
   </header>
-  <audio id="bgm" loop preload="auto" src="court-chaos-theme.mp3"></audio>
+  <audio id="bgm" loop preload="auto" src="hood-court-theme.mp3"></audio>
 
   <!-- SETUP -->
   <div id="screen-setup" class="panel center">
@@ -53,7 +54,7 @@
   <!-- VERDICT -->
   <div id="screen-verdict" class="hidden">
     <div class="panel judge-stage">
-      <img id="judge-img" src="djinnra.png" alt="Judge Djinn Ra">
+      <img id="judge-img" src="djinnra-cutout.png" alt="Judge Djinn Ra">
       <div class="winner-banner" id="winner-banner"></div>
       <div class="verdict-text" id="verdict-text"></div>
       <div class="voice-row">
@@ -110,6 +111,7 @@ document.getElementById("btn-music").onclick = (e) => {
 document.getElementById("btn-create").onclick = () => {
   socket.emit("create-room", ({ code: c }) => {
     code = c;
+    sessionStorage.setItem("dcc-code", c); // saved here too, so a lobby-phase refresh can re-attach
     document.getElementById("btn-create").classList.add("hidden");
     document.getElementById("lobby").classList.remove("hidden");
     document.getElementById("room-code").textContent = code;
