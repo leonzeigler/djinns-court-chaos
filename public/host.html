@@ -6,8 +6,41 @@
 <title>Djinn's Hood Court — Host</title>
 <link rel="stylesheet" href="style.css">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<style>
+  /* 3D virtual courtroom layers (behind everything) */
+  #court3d { position: fixed; inset: 0; z-index: 0; }
+  #court3d canvas { display: block; }
+  #court-bubbles { position: fixed; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+  #court-flash {
+    position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle, rgba(245,197,24,.9), rgba(245,197,24,0) 65%);
+    transition: opacity .3s;
+  }
+  .wrap { position: relative; z-index: 10; }
+  /* speech bubbles floating over the counsel tables */
+  .cbubble {
+    position: absolute; left: 0; top: 0; max-width: 300px;
+    background: rgba(12,9,5,.93); border: 2px solid var(--gold);
+    border-radius: 12px; padding: 8px 12px; font-size: 14px; line-height: 1.35;
+    box-shadow: 0 4px 18px rgba(0,0,0,.6);
+  }
+  .cbubble b { display: block; font-size: 12px; letter-spacing: 1px; margin-bottom: 2px; }
+  .cbubble.plaintiff { border-color: #f5c518; }
+  .cbubble.plaintiff b { color: #f5c518; }
+  .cbubble.defendant { border-color: #4da3ff; }
+  .cbubble.defendant b { color: #4da3ff; }
+  /* let the courtroom glow through the panels */
+  .panel { background: rgba(14,10,6,.88); }
+  #jury-list .arg { margin-bottom: 8px; }
+</style>
 </head>
 <body>
+<div id="court3d"></div>
+<div id="court-bubbles"></div>
+<div id="court-flash"></div>
 <div class="wrap">
   <header class="brand">
     <h1 class="game-title"><span class="scales">⚖️</span> DJINN'S HOOD COURT</h1>
@@ -43,7 +76,23 @@
     <div class="panel">
       <div class="timertext" id="timer-text">75</div>
       <div class="timerbar"><div id="timer-fill"></div></div>
-      <div class="center"><button id="btn-lock" class="btn ghost">🔒 Lock Arguments</button></div>
+      <div class="center" id="lock-row"><button id="btn-lock" class="btn ghost">🔒 Lock Arguments</button></div>
+      <div class="center hidden" id="next-round-row">
+        <p class="muted" id="round-break-label" style="margin:6px 0"></p>
+        <button id="btn-next-round" class="btn">Next Round →</button>
+      </div>
+      <div class="center hidden" id="halftime-row">
+        <h2 style="color:var(--gold)">🎺 HALFTIME 🎺</h2>
+        <p class="muted">First half in the books. Same case — second half coming up.</p>
+        <button id="btn-end-halftime" class="btn">End Halftime — Start Round 3 →</button>
+      </div>
+      <div class="center hidden" id="jury-row">
+        <h2 style="color:var(--gold)">🧑‍⚖️ THE JURY DELIBERATES 🧑‍⚖️</h2>
+        <p class="muted" id="jury-status">The six jurors are weighing four rounds of arguments…</p>
+        <div id="jury-list" style="text-align:left;max-width:620px;margin:0 auto"></div>
+        <h3 id="jury-tally" class="hidden" style="color:var(--gold)"></h3>
+        <button id="btn-ruling" class="btn hidden">⚖️ Hear Judge Djinn Ra's Ruling →</button>
+      </div>
     </div>
     <div class="feed">
       <div class="panel"><h3 style="color:var(--plaintiff)">⚖️ PLAINTIFF</h3><div id="feed-p"></div></div>
@@ -56,6 +105,7 @@
     <div class="panel judge-stage">
       <img id="judge-img" src="djinnra-cutout.png" alt="Judge Djinn Ra">
       <div class="winner-banner" id="winner-banner"></div>
+      <p class="muted" id="verdict-jury-line" style="margin:4px 0"></p>
       <div class="verdict-text" id="verdict-text"></div>
       <div class="voice-row">
         <span class="lbl">🎙️ JUDGE'S VOICE</span>
@@ -67,7 +117,7 @@
         <div class="score"><div class="n" id="score-p">0</div><div class="t">PLAINTIFF</div></div>
         <div class="score"><div class="n" id="score-d">0</div><div class="t">DEFENDANT</div></div>
       </div>
-      <button id="btn-next" class="btn mt">Next Case →</button>
+      <button id="btn-next" class="btn mt">🏆 Crown the Winner →</button>
       <button id="btn-end" class="btn ghost mt">End Game</button>
     </div>
   </div>
@@ -91,11 +141,32 @@
 <script>
 const socket = io();
 let code = null, timerInt = null, muted = false, lastVerdict = "";
+let currentRound = 0, maxRounds = 4;
 
 /* ---------- screens ---------- */
 function show(id) {
   ["screen-setup","screen-case","screen-verdict","screen-over"].forEach(s =>
     document.getElementById(s).classList.toggle("hidden", s !== id));
+}
+
+/* ---------- 3D virtual courtroom ----------
+   Loaded as an ES module below; may be unavailable (no WebGL/CDN).
+   Every call is guarded so the 2D game always works. */
+function court(fn) {
+  try {
+    if (window.Courtroom3D && window.Courtroom3D.ready) fn(window.Courtroom3D);
+  } catch (e) { /* 2D fallback */ }
+}
+
+function renderCaseHeader(st) {
+  currentRound = st.round;
+  maxRounds = st.maxRounds || maxRounds;
+  document.getElementById("case-title").textContent = st.case.title + " — ROUND " + st.round + " OF " + maxRounds;
+  document.getElementById("case-charge").textContent = "Charge: " + st.case.charge;
+  document.getElementById("case-detail").textContent = st.case.detail;
+  document.getElementById("feed-p").innerHTML = "";
+  document.getElementById("feed-d").innerHTML = "";
+  st.args.forEach(a => addArg(a.name, a.team, a.text, a.round));
 }
 
 /* ---------- background music (original theme, royalty-free) ---------- */
@@ -150,14 +221,22 @@ document.getElementById("btn-start").onclick = () => {
 };
 
 /* ---------- case ---------- */
-socket.on("case-started", ({ round, case: c, argueSeconds }) => {
+socket.on("case-started", ({ round, maxRounds: mr, case: c, argueSeconds }) => {
   sessionStorage.setItem("dcc-code", code);
+  currentRound = round;
+  if (mr) maxRounds = mr;
   show("screen-case");
-  document.getElementById("case-title").textContent = c.title + " — ROUND " + round;
+  document.getElementById("case-title").textContent = c.title + " — ROUND " + round + " OF " + maxRounds;
   document.getElementById("case-charge").textContent = "Charge: " + c.charge;
   document.getElementById("case-detail").textContent = c.detail;
   document.getElementById("feed-p").innerHTML = "";
   document.getElementById("feed-d").innerHTML = "";
+  document.getElementById("next-round-row").classList.add("hidden");
+  document.getElementById("halftime-row").classList.add("hidden");
+  document.getElementById("jury-row").classList.add("hidden");
+  document.getElementById("lock-row").classList.remove("hidden");
+  document.getElementById("btn-next-round").textContent = "Start Round " + (round + 1) + " →";
+  court(c3d => { c3d.setMode("case"); c3d.resetJury(); });
   startTimer(argueSeconds);
 });
 
@@ -175,11 +254,15 @@ function startTimer(total) {
   timerInt = setInterval(tick, 1000);
 }
 
-socket.on("argument", ({ name, team, text }) => addArg(name, team, text));
-function addArg(name, team, text) {
+socket.on("argument", ({ name, team, text, round }) => {
+  addArg(name, team, text, round);
+  court(c => c.showArgument(team, name, text));
+});
+function addArg(name, team, text, round) {
   const div = document.createElement("div");
   div.className = "arg " + team;
-  div.innerHTML = `<div class="who">${escapeHtml(name)}</div>${escapeHtml(text)}`;
+  const tag = round ? `<span class="round-tag">R${round}</span>` : "";
+  div.innerHTML = `<div class="who">${tag}${escapeHtml(name)}</div>${escapeHtml(text)}`;
   document.getElementById(team === "plaintiff" ? "feed-p" : "feed-d").appendChild(div);
 }
 function escapeHtml(s) {
@@ -187,30 +270,109 @@ function escapeHtml(s) {
 }
 
 document.getElementById("btn-lock").onclick = () => socket.emit("lock-arguments");
-socket.on("arguments-locked", () => {
+socket.on("arguments-locked", ({ argCount, round, maxRounds: mr }) => {
   clearInterval(timerInt);
   document.getElementById("timer-text").textContent = "🔒";
-  // Auto-send to the judge after a beat.
-  setTimeout(() => socket.emit("request-verdict"), 1200);
+  if (mr) maxRounds = mr;
+  const r = round || currentRound;
+  if (r < maxRounds) {
+    // Rounds 1-3: same case continues — offer the next round.
+    document.getElementById("lock-row").classList.add("hidden");
+    document.getElementById("round-break-label").textContent =
+      "Round " + r + " of " + maxRounds + " complete (" + argCount + " arguments). Same case continues.";
+    document.getElementById("btn-next-round").textContent = r === 2 ? "🎺 Halftime →" : "Start Round " + (r + 1) + " →";
+    document.getElementById("next-round-row").classList.remove("hidden");
+  } else {
+    // Round 4: the six AI jurors vote, then Judge Djinn Ra rules.
+    document.getElementById("lock-row").classList.add("hidden");
+    document.getElementById("jury-row").classList.remove("hidden");
+    document.getElementById("jury-list").innerHTML = "";
+    document.getElementById("jury-tally").classList.add("hidden");
+    document.getElementById("btn-ruling").classList.add("hidden");
+    document.getElementById("jury-status").textContent = "The six jurors are weighing four rounds of arguments…";
+    court(c => { c.setMode("jury"); c.resetJury(); });
+    setTimeout(() => socket.emit("start-jury", (res) => { if (res && res.error) alert(res.error); }), 1200);
+  }
 });
+document.getElementById("btn-next-round").onclick = () => {
+  socket.emit("next-round", (res) => { if (res && res.error) alert(res.error); });
+};
+/* ---------- the jury votes ---------- */
+let juryTimers = [];
+function addJurorVote(v) {
+  const div = document.createElement("div");
+  div.className = "arg " + v.vote;
+  const badge = v.vote === "plaintiff" ? "⚖️ PLAINTIFF" : "🛡️ DEFENDANT";
+  div.innerHTML = `<div class="who">${escapeHtml(v.name)} <span class="round-tag">${badge}</span></div>${escapeHtml(v.quip)}`;
+  document.getElementById("jury-list").appendChild(div);
+}
+function showJuryTally(tally) {
+  const t = document.getElementById("jury-tally");
+  const leader = tally.plaintiff === tally.defendant ? "(SPLIT!)"
+    : tally.plaintiff > tally.defendant ? "PLAINTIFF" : "DEFENDANT";
+  t.textContent = `🧑‍⚖️ JURY: ${tally.plaintiff}–${tally.defendant} ${leader}`;
+  t.classList.remove("hidden");
+  document.getElementById("btn-ruling").classList.remove("hidden");
+  document.getElementById("jury-status").textContent = "The jury has spoken. Now the judge rules.";
+}
+socket.on("jury-votes", ({ votes, tally }) => {
+  court(c => {
+    c.setJurorNames(votes.map(v => v.name));
+    c.setJurorColors(votes.map(v => v.color));
+    c.resetJury();
+  });
+  juryTimers.forEach(clearTimeout); juryTimers = [];
+  document.getElementById("jury-list").innerHTML = "";
+  document.getElementById("jury-tally").classList.add("hidden");
+  document.getElementById("btn-ruling").classList.add("hidden");
+  document.getElementById("jury-status").textContent = "The jury is voting…";
+  votes.forEach((v, i) => {
+    juryTimers.push(setTimeout(() => {
+      court(c => c.revealJurorVote(i, v.vote));
+      addJurorVote(v);
+      if (i === votes.length - 1) showJuryTally(tally);
+    }, 500 + i * 950));
+  });
+});
+document.getElementById("btn-ruling").onclick = () => {
+  socket.emit("request-verdict", (res) => { if (res && res.error) alert(res.error); });
+};
+socket.on("halftime", () => {
+  clearInterval(timerInt);
+  document.getElementById("timer-text").textContent = "🎺";
+  document.getElementById("lock-row").classList.add("hidden");
+  document.getElementById("next-round-row").classList.add("hidden");
+  document.getElementById("halftime-row").classList.remove("hidden");
+  court(c => c.setMode("halftime"));
+});
+document.getElementById("btn-end-halftime").onclick = () => {
+  socket.emit("end-halftime", (res) => { if (res && res.error) alert(res.error); });
+};
 
 /* ---------- verdict ---------- */
-socket.on("verdict", ({ verdict, winner, scores }) => {
+socket.on("verdict", ({ verdict, winner, scores, tally }) => {
   lastVerdict = verdict;
-  show("screen-verdict");
-  // Gavel slam: shake the courtroom, then the judge speaks.
-  const panel = document.querySelector("#screen-verdict .panel");
-  panel.classList.remove("gavel-shake");
-  void panel.offsetWidth;
-  panel.classList.add("gavel-shake");
-  setTimeout(() => panel.classList.remove("gavel-shake"), 650);
-  const banner = document.getElementById("winner-banner");
-  banner.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS" : "🛡️ DEFENDANT WINS";
-  banner.className = "winner-banner " + winner;
-  document.getElementById("verdict-text").textContent = verdict;
-  document.getElementById("score-p").textContent = scores.plaintiff;
-  document.getElementById("score-d").textContent = scores.defendant;
-  speak(verdict);
+  // The 3D gavel lands first — then the ruling card slides in.
+  court(c => { c.setMode("verdict"); c.gavelBang(); });
+  setTimeout(() => {
+    show("screen-verdict");
+    // Gavel slam: shake the courtroom, then the judge speaks.
+    const panel = document.querySelector("#screen-verdict .panel");
+    panel.classList.remove("gavel-shake");
+    void panel.offsetWidth;
+    panel.classList.add("gavel-shake");
+    setTimeout(() => panel.classList.remove("gavel-shake"), 650);
+    const banner = document.getElementById("winner-banner");
+    banner.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS THE CASE" : "🛡️ DEFENDANT WINS THE CASE";
+    banner.className = "winner-banner " + winner;
+    document.getElementById("verdict-jury-line").textContent = tally
+      ? `The jury voted ${tally.plaintiff}–${tally.defendant}.`
+      : "";
+    document.getElementById("verdict-text").textContent = verdict;
+    document.getElementById("score-p").textContent = scores.plaintiff;
+    document.getElementById("score-d").textContent = scores.defendant;
+    speak(verdict);
+  }, 1450);
 });
 
 document.getElementById("btn-next").onclick = () => socket.emit("next-case");
@@ -338,17 +500,84 @@ function applyState(st) {
     document.getElementById("lobby").classList.remove("hidden");
     document.getElementById("room-code").textContent = st.code;
     renderPlayers(st.players);
-  } else if (st.phase === "argue") {
+    court(c => c.setMode("lobby"));
+  } else if (st.phase === "argue" || st.phase === "locked" || st.phase === "verdict") {
     show("screen-case");
-    document.getElementById("case-title").textContent = st.case.title + " — ROUND " + st.round;
-    document.getElementById("case-charge").textContent = "Charge: " + st.case.charge;
-    document.getElementById("case-detail").textContent = st.case.detail;
-    document.getElementById("feed-p").innerHTML = "";
-    document.getElementById("feed-d").innerHTML = "";
-    st.args.forEach(a => addArg(a.name, a.team, a.text));
-    startTimer(st.secondsLeft || st.argueSeconds);
+    renderCaseHeader(st);
+    court(c => c.setMode("case"));
+    if (st.phase === "argue") {
+      document.getElementById("next-round-row").classList.add("hidden");
+      document.getElementById("halftime-row").classList.add("hidden");
+      document.getElementById("jury-row").classList.add("hidden");
+      document.getElementById("lock-row").classList.remove("hidden");
+      startTimer(st.secondsLeft || st.argueSeconds);
+    } else {
+      // Re-synced mid-lock or mid-verdict: show the state, offer next round if any remain.
+      clearInterval(timerInt);
+      document.getElementById("timer-text").textContent = "🔒";
+      document.getElementById("lock-row").classList.add("hidden");
+      if (st.round < maxRounds && st.phase === "locked") {
+        document.getElementById("round-break-label").textContent =
+          "Round " + st.round + " of " + maxRounds + " complete. Same case continues.";
+        document.getElementById("btn-next-round").textContent = st.round === 2 ? "🎺 Halftime →" : "Start Round " + (st.round + 1) + " →";
+        document.getElementById("next-round-row").classList.remove("hidden");
+      }
+    }
+  } else if (st.phase === "halftime") {
+    show("screen-case");
+    renderCaseHeader(st);
+    clearInterval(timerInt);
+    document.getElementById("timer-text").textContent = "🎺";
+    document.getElementById("lock-row").classList.add("hidden");
+    document.getElementById("next-round-row").classList.add("hidden");
+    document.getElementById("jury-row").classList.add("hidden");
+    document.getElementById("halftime-row").classList.remove("hidden");
+    court(c => c.setMode("halftime"));
+  } else if (st.phase === "jury") {
+    show("screen-case");
+    renderCaseHeader(st);
+    clearInterval(timerInt);
+    document.getElementById("timer-text").textContent = "🧑‍⚖️";
+    document.getElementById("lock-row").classList.add("hidden");
+    document.getElementById("next-round-row").classList.add("hidden");
+    document.getElementById("halftime-row").classList.add("hidden");
+    document.getElementById("jury-row").classList.remove("hidden");
+    court(c => {
+      c.setMode("jury");
+      c.resetJury();
+      if (st.jury) {
+        c.setJurorNames(st.jury.votes.map(v => v.name));
+        c.setJurorColors(st.jury.votes.map(v => v.color));
+      }
+    });
+    document.getElementById("jury-list").innerHTML = "";
+    if (st.jury) {
+      // Re-sync after votes: reveal instantly, no stagger.
+      st.jury.votes.forEach((v, i) => {
+        court(c => c.revealJurorVote(i, v.vote));
+        addJurorVote(v);
+      });
+      showJuryTally(st.jury.tally);
+    } else {
+      document.getElementById("jury-tally").classList.add("hidden");
+      document.getElementById("btn-ruling").classList.add("hidden");
+      document.getElementById("jury-status").textContent = "The six jurors are weighing four rounds of arguments…";
+    }
   }
 }
+</script>
+<script type="module">
+  // 3D virtual courtroom — boots behind the host UI. If WebGL or the
+  // Three.js CDN is unavailable, the 2D game keeps working untouched.
+  try {
+    const { Courtroom3D } = await import("./courtroom3d.js");
+    Courtroom3D.init(document.getElementById("court3d"));
+    Courtroom3D.setMode("lobby");
+  } catch (e) {
+    console.warn("3D courtroom unavailable:", e);
+    const el = document.getElementById("court3d");
+    if (el) el.style.display = "none";
+  }
 </script>
 </body>
 </html>

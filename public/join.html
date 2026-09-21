@@ -53,7 +53,14 @@
   <!-- LOCKED -->
   <div id="p-locked" class="panel center hidden">
     <h2>🔒 Arguments locked</h2>
-    <p class="muted">Judge Djinn Ra is deliberating…</p>
+    <p class="muted" id="locked-msg">Judge Djinn Ra is deliberating…</p>
+    <img src="djinnra.png" alt="Judge Djinn Ra" style="width:150px;border-radius:14px;border:2px solid var(--gold)">
+  </div>
+
+  <!-- HALFTIME -->
+  <div id="p-halftime" class="panel center hidden">
+    <h2 style="color:var(--gold)">🎺 HALFTIME 🎺</h2>
+    <p class="muted">First half done — same case! Round 3 coming up.</p>
     <img src="djinnra.png" alt="Judge Djinn Ra" style="width:150px;border-radius:14px;border:2px solid var(--gold)">
   </div>
 
@@ -61,7 +68,7 @@
   <div id="p-verdict" class="panel center hidden">
     <div class="winner-banner" id="p-winner"></div>
     <div class="verdict-text" id="p-verdict-text" style="text-align:left"></div>
-    <p class="muted">Next case starting soon…</p>
+    <p class="muted">Court adjourned!</p>
   </div>
 
   <!-- OVER -->
@@ -81,7 +88,7 @@ const socket = io();
 let myTeam = null, myName = null;
 
 function show(id) {
-  ["p-join","p-lobby","p-argue","p-locked","p-verdict","p-over"].forEach(s =>
+  ["p-join","p-lobby","p-argue","p-locked","p-halftime","p-verdict","p-over"].forEach(s =>
     document.getElementById(s).classList.toggle("hidden", s !== id));
 }
 
@@ -113,9 +120,10 @@ socket.on("players-updated", ({ players }) => {
   });
 });
 
-socket.on("case-started", ({ round, case: c, argueSeconds }) => {
+socket.on("case-started", ({ round, maxRounds, case: c, argueSeconds }) => {
   show("p-argue");
-  document.getElementById("pcase-title").textContent = c.title + " — ROUND " + round;
+  document.getElementById("pcase-title").textContent =
+    c.title + " — ROUND " + round + " OF " + (maxRounds || 4);
   document.getElementById("pcase-charge").textContent = "Charge: " + c.charge;
   document.getElementById("pcase-detail").textContent = c.detail;
   const ta = document.getElementById("in-arg");
@@ -144,12 +152,26 @@ document.getElementById("btn-arg").onclick = () => {
   });
 };
 
-socket.on("arguments-locked", () => show("p-locked"));
+socket.on("arguments-locked", ({ round, maxRounds }) => {
+  show("p-locked");
+  const mr = maxRounds || 4;
+  document.getElementById("locked-msg").textContent =
+    (round && round < mr)
+      ? "Round " + round + " of " + mr + " complete — get ready for round " + (round + 1) + ". Same case!"
+      : "Judge Djinn Ra is deliberating…";
+});
+
+socket.on("halftime", () => show("p-halftime"));
+
+socket.on("jury-votes", () => {
+  show("p-locked");
+  document.getElementById("locked-msg").textContent = "🧑‍⚖️ The jury is voting…";
+});
 
 socket.on("verdict", ({ verdict, winner, scores }) => {
   show("p-verdict");
   const b = document.getElementById("p-winner");
-  b.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS" : "🛡️ DEFENDANT WINS";
+  b.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS THE CASE" : "🛡️ DEFENDANT WINS THE CASE";
   b.className = "winner-banner " + winner;
   document.getElementById("p-verdict-text").textContent = verdict;
 });
@@ -169,6 +191,29 @@ socket.on("game-over", ({ scores, champion }) => {
 socket.on("room-state", (st) => applyState(st));
 function applyState(st) {
   if (st.phase === "lobby") show("p-lobby");
+  else if (st.phase === "argue") {
+    show("p-argue");
+    if (st.case) {
+      document.getElementById("pcase-title").textContent =
+        st.case.title + " — ROUND " + st.round + " OF " + (st.maxRounds || 4);
+      document.getElementById("pcase-charge").textContent = "Charge: " + st.case.charge;
+      document.getElementById("pcase-detail").textContent = st.case.detail;
+    }
+  }
+  else if (st.phase === "locked") {
+    show("p-locked");
+    const mr = st.maxRounds || 4;
+    document.getElementById("locked-msg").textContent =
+      (st.round && st.round < mr)
+        ? "Round " + st.round + " of " + mr + " complete — get ready for round " + (st.round + 1) + ". Same case!"
+        : "Judge Djinn Ra is deliberating…";
+  }
+  else if (st.phase === "verdict") show("p-locked");
+  else if (st.phase === "halftime") show("p-halftime");
+  else if (st.phase === "jury") {
+    show("p-locked");
+    document.getElementById("locked-msg").textContent = "🧑‍⚖️ The jury is voting…";
+  }
   else if (st.phase === "over") show("p-over");
 }
 </script>

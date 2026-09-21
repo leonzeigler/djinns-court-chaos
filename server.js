@@ -9,7 +9,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { Server } = require("socket.io");
 const { makeCase } = require("./cases");
-const { judgeVerdict } = require("./judge");
+const { judgeVerdict, juryVotes } = require("./judge");
 
 const app = express();
 const server = http.createServer(app);
@@ -68,7 +68,7 @@ app.post("/api/say", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const ARGUE_SECONDS = 75;
-const MAX_ROUNDS = 3;
+const MAX_ROUNDS = 4; // one case, four rounds of arguments, one final verdict
 
 const rooms = {};
 
@@ -90,13 +90,14 @@ function stateFor(room, isHost) {
     : 0;
   return {
     code: room.code,
-    phase: room.phase, // lobby | argue | locked | verdict | over
+    phase: room.phase, // lobby | argue | locked | halftime | jury | verdict | over
     round: room.round,
     players: room.players.map((p) => ({ name: p.name, team: p.team })),
     scores: room.scores,
     case: room.case,
     args: isHost ? room.args : [],
     argCount: room.args.length,
+    jury: room.jury,
     secondsLeft,
     argueSeconds: ARGUE_SECONDS,
     maxRounds: MAX_ROUNDS,
@@ -119,12 +120,26 @@ function clearTimer(room) {
   room.deadline = null;
 }
 
-function startCase(room) {
+// One case per game. Round 1 draws the case; rounds 2-4 argue the SAME case.
+// Arguments accumulate across all rounds — the judge weighs everything
+// at the end and delivers a single final verdict.
+function startGame(room) {
   clearTimer(room);
-  room.round += 1;
+  room.round = 1;
   room.case = makeCase();
-  room.case.round = room.round;
   room.args = [];
+  room.jury = null;
+  beginRound(room);
+}
+
+function nextRound(room) {
+  room.round += 1;
+  beginRound(room);
+}
+
+function beginRound(room) {
+  clearTimer(room);
+  room.case.round = room.round;
   room.phase = "argue";
   room.deadline = Date.now() + ARGUE_SECONDS * 1000;
   // Fresh arguments each round — everyone can make their case again.
@@ -134,6 +149,7 @@ function startCase(room) {
   room.timer = setTimeout(() => lockArguments(room), ARGUE_SECONDS * 1000);
   io.to(room.code).emit("case-started", {
     round: room.round,
+    maxRounds: MAX_ROUNDS,
     case: room.case,
     argueSeconds: ARGUE_SECONDS,
   });
@@ -144,7 +160,11 @@ function lockArguments(room) {
   if (room.phase !== "argue") return;
   clearTimer(room);
   room.phase = "locked";
-  io.to(room.code).emit("arguments-locked", { argCount: room.args.length });
+  io.to(room.code).emit("arguments-locked", {
+    argCount: room.args.length,
+    round: room.round,
+    maxRounds: MAX_ROUNDS,
+  });
   broadcastState(room.code);
 }
 
@@ -161,6 +181,7 @@ io.on("connection", (socket) => {
       round: 0,
       case: null,
       args: [],
+      jury: null, // 6 AI jurors vote after round 4, before the judge rules
       scores: { plaintiff: 0, defendant: 0 },
       timer: null,
       deadline: null,
@@ -191,13 +212,13 @@ io.on("connection", (socket) => {
   socket.on("start-case", (cb) => {
     const room = rooms[socket.data?.code];
     if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
-    if (room.phase !== "lobby" && room.phase !== "verdict") {
+    if (room.phase !== "lobby") {
       return cb && cb({ error: "Can't start a case right now." });
     }
     if (room.players.length < 2) {
       return cb && cb({ error: "Need at least 2 players in the courtroom." });
     }
-    startCase(room);
+    startGame(room);
     cb && cb({ ok: true });
   });
 
@@ -208,13 +229,63 @@ io.on("connection", (socket) => {
     cb && cb({ ok: true });
   });
 
+  // Advance to the next round of the SAME case (rounds 1-3).
+  // Like basketball: rounds 1-2, halftime, rounds 3-4.
+  socket.on("next-round", (cb) => {
+    const room = rooms[socket.data?.code];
+    if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
+    if (room.phase !== "locked") return cb && cb({ error: "Lock the arguments first." });
+    if (room.round >= MAX_ROUNDS) {
+      return cb && cb({ error: "All four rounds are done — ask for the verdict." });
+    }
+    if (room.round === 2) {
+      // Halftime after round 2.
+      clearTimer(room);
+      room.phase = "halftime";
+      io.to(room.code).emit("halftime", { round: 2, maxRounds: MAX_ROUNDS });
+      broadcastState(room.code);
+      cb && cb({ ok: true });
+      return;
+    }
+    nextRound(room);
+    cb && cb({ ok: true });
+  });
+
+  // Halftime's over — start round 3.
+  socket.on("end-halftime", (cb) => {
+    const room = rooms[socket.data?.code];
+    if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
+    if (room.phase !== "halftime") return cb && cb({ error: "Not halftime." });
+    nextRound(room);
+    cb && cb({ ok: true });
+  });
+
+  // After round 4: the 6 AI jurors deliberate and vote, then the judge rules.
+  socket.on("start-jury", (cb) => {
+    const room = rooms[socket.data?.code];
+    if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
+    if (room.phase !== "locked") return cb && cb({ error: "Lock the arguments first." });
+    if (room.round < MAX_ROUNDS) {
+      return cb && cb({ error: "The jury votes after round 4." });
+    }
+    room.phase = "jury";
+    const jury = juryVotes(room);
+    room.jury = jury;
+    io.to(room.code).emit("jury-votes", jury);
+    broadcastState(room.code);
+    cb && cb({ ok: true });
+  });
+
   socket.on("request-verdict", (cb) => {
     const room = rooms[socket.data?.code];
     if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
-    if (room.phase !== "locked") {
-      return cb && cb({ error: "Lock the arguments first." });
+    if (room.round < MAX_ROUNDS) {
+      return cb && cb({ error: "The judge rules after round 4." });
     }
-    const verdict = judgeVerdict(room);
+    if (room.phase !== "jury" || !room.jury) {
+      return cb && cb({ error: "The jury has to vote first." });
+    }
+    const verdict = judgeVerdict(room, room.jury);
     room.scores[verdict.winner] += 1;
     room.phase = "verdict";
     io.to(room.code).emit("verdict", {
@@ -223,24 +294,22 @@ io.on("connection", (socket) => {
       scores: room.scores,
       round: room.round,
       maxRounds: MAX_ROUNDS,
+      tally: room.jury.tally,
     });
     broadcastState(room.code);
     cb && cb({ ok: true });
   });
 
+  // After the final verdict: crown the winner, court adjourned.
   socket.on("next-case", (cb) => {
     const room = rooms[socket.data?.code];
     if (!room || !socket.data?.isHost) return cb && cb({ error: "Not the host." });
     if (room.phase !== "verdict") return cb && cb({ error: "No verdict yet." });
-    if (room.round >= MAX_ROUNDS) {
-      room.phase = "over";
-      const s = room.scores;
-      const champion =
-        s.plaintiff === s.defendant ? "draw" : s.plaintiff > s.defendant ? "plaintiff" : "defendant";
-      io.to(room.code).emit("game-over", { scores: s, champion });
-    } else {
-      startCase(room);
-    }
+    room.phase = "over";
+    const s = room.scores;
+    const champion =
+      s.plaintiff === s.defendant ? "draw" : s.plaintiff > s.defendant ? "plaintiff" : "defendant";
+    io.to(room.code).emit("game-over", { scores: s, champion });
     broadcastState(room.code);
     cb && cb({ ok: true });
   });
@@ -286,11 +355,12 @@ io.on("connection", (socket) => {
     text = (text || "").trim().slice(0, 280);
     if (!text) return cb({ error: "Write something first, counselor." });
     d.submitted = true;
-    room.args.push({ name: d.name, team: d.team, text });
+    room.args.push({ name: d.name, team: d.team, text, round: room.round });
     io.to(room.code).emit("argument", {
       name: d.name,
       team: d.team,
       text,
+      round: room.round,
       count: room.args.length,
     });
     cb({ ok: true });
