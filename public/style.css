@@ -143,9 +143,39 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
   border-radius: 18px;
   border: 3px solid var(--gold);
   box-shadow: 0 0 50px rgba(245, 197, 24, 0.35);
-  animation: pulse 2.4s ease-in-out infinite;
+  animation: judge-idle 4.5s ease-in-out infinite;
+  transform-origin: 50% 80%;
 }
-@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+/* The judge is alive: gentle hover when idle... */
+@keyframes judge-idle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-9px) rotate(0.7deg); }
+}
+/* ...golden aura + voice-driven bounce while delivering a verdict. */
+.judge-stage img.talking {
+  animation: none;
+  border-color: #ffe27a;
+  box-shadow: 0 0 70px rgba(245, 197, 24, 0.65);
+}
+/* Gavel slam when the verdict lands. */
+@keyframes gavel-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-10px, 4px) rotate(-0.6deg); }
+  30% { transform: translate(9px, -5px) rotate(0.6deg); }
+  45% { transform: translate(-7px, -3px) rotate(-0.4deg); }
+  60% { transform: translate(6px, 4px) rotate(0.4deg); }
+  75% { transform: translate(-4px, 2px); }
+}
+.gavel-shake { animation: gavel-shake 0.55s ease; }
+.voice-status {
+  font-size: 13px;
+  color: var(--gold);
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid #4a3d18;
+  border-radius: 20px;
+  padding: 5px 12px;
+  white-space: nowrap;
+}
 .verdict-text {
   font-size: clamp(17px, 3.4vw, 23px);
   line-height: 1.65;

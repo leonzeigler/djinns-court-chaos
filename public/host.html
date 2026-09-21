@@ -53,12 +53,12 @@
   <!-- VERDICT -->
   <div id="screen-verdict" class="hidden">
     <div class="panel judge-stage">
-      <img src="djinnra.png" alt="Judge Djinn Ra">
+      <img id="judge-img" src="djinnra.png" alt="Judge Djinn Ra">
       <div class="winner-banner" id="winner-banner"></div>
       <div class="verdict-text" id="verdict-text"></div>
       <div class="voice-row">
         <span class="lbl">🎙️ JUDGE'S VOICE</span>
-        <select id="voice-select"></select>
+        <span id="voice-status" class="voice-status">…</span>
         <button id="btn-mute" class="btn small ghost">Mute</button>
         <button id="btn-replay" class="btn small ghost">↻ Replay verdict</button>
       </div>
@@ -196,6 +196,12 @@ socket.on("arguments-locked", () => {
 socket.on("verdict", ({ verdict, winner, scores }) => {
   lastVerdict = verdict;
   show("screen-verdict");
+  // Gavel slam: shake the courtroom, then the judge speaks.
+  const panel = document.querySelector("#screen-verdict .panel");
+  panel.classList.remove("gavel-shake");
+  void panel.offsetWidth;
+  panel.classList.add("gavel-shake");
+  setTimeout(() => panel.classList.remove("gavel-shake"), 650);
   const banner = document.getElementById("winner-banner");
   banner.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS" : "🛡️ DEFENDANT WINS";
   banner.className = "winner-banner " + winner;
@@ -225,54 +231,98 @@ socket.on("game-over", ({ scores, champion }) => {
 document.getElementById("btn-new").onclick = () => location.reload();
 
 /* ---------- Judge Djinn Ra's voice ----------
-   Uses the device's built-in speech voices (free, offline-capable).
-   Pick the deepest male voice below — slowed + pitched low for that
-   heavyweight-judge feel. For a true Brooklyn-accent voice, a voice
-   API (e.g. ElevenLabs) can be wired into speak() later. */
-const voiceSelect = document.getElementById("voice-select");
-let voices = [];
-function loadVoices() {
-  voices = speechSynthesis.getVoices();
-  voiceSelect.innerHTML = "";
-  // Prefer deep male US voices first.
-  const scored = voices.map((v, i) => {
-    const n = (v.name + " " + v.lang).toLowerCase();
-    let s = 0;
-    if (n.includes("en-us")) s += 3;
-    else if (n.includes("en")) s += 1;
-    if (/david|james|guy|daniel|fred|alex|victor|marcus|deep|male/.test(n)) s += 4;
-    if (/female|samantha|zira|karen|moira|tessa/.test(n)) s -= 5;
-    return { v, i, s };
-  }).sort((a, b) => b.s - a.s);
-  scored.forEach(({ v, i }) => {
-    const o = document.createElement("option");
-    o.value = i;
-    o.textContent = v.name + " (" + v.lang + ")";
-    voiceSelect.appendChild(o);
-  });
-  if (scored.length) voiceSelect.value = scored[0].i;
-}
-if ("speechSynthesis" in window) {
-  loadVoices();
-  speechSynthesis.onvoiceschanged = loadVoices;
-} else {
-  voiceSelect.innerHTML = "<option>Voice not supported on this device</option>";
+   AI voice served by the game server (/api/say, ElevenLabs).
+   Falls back to the device's built-in speech only if the server
+   has no voice key configured. */
+const voiceStatus = document.getElementById("voice-status");
+const judgeImg = document.getElementById("judge-img");
+let judgeAudio = null;      // single persistent element (one MediaElementSource only)
+let audioCtx = null, analyser = null, talkRaf = null, voiceMode = "ai";
+
+function stopTalking() {
+  if (talkRaf) { cancelAnimationFrame(talkRaf); talkRaf = null; }
+  if (judgeAudio) { judgeAudio.pause(); }
+  judgeImg.classList.remove("talking");
+  judgeImg.style.transform = "";
 }
 
-function speak(text) {
-  if (muted || !("speechSynthesis" in window)) return;
+// Bounce the judge in time with his own voice — reads as talking.
+function talkLoop() {
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  const tick = () => {
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += Math.abs(data[i] - 128);
+    const amp = Math.min(1, (sum / data.length) / 36);
+    const bounce = (amp * 12).toFixed(1);
+    judgeImg.style.transform =
+      "translateY(" + (-bounce) + "px) scaleY(" + (1 + amp * 0.07).toFixed(3) + ")";
+    talkRaf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+function legacySpeak(text) {
+  // Robot fallback — only used if the AI voice isn't configured.
+  if (!("speechSynthesis" in window)) return;
+  voiceMode = "robot";
+  voiceStatus.textContent = "🤖 device voice (add AI key for the real judge)";
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  const v = voices[parseInt(voiceSelect.value, 10)];
-  if (v) u.voice = v;
-  u.rate = 0.92;   // measured, deliberate judge cadence
-  u.pitch = 0.65;  // deep
-  u.volume = 1;
+  u.rate = 0.92; u.pitch = 0.65;
+  const vs = speechSynthesis.getVoices();
+  const deep = vs.find(v => /david|daniel|james|guy|fred/i.test(v.name) && /en[-_]us/i.test(v.lang));
+  if (deep) u.voice = deep;
+  judgeImg.classList.add("talking");
+  u.onend = u.onerror = () => stopTalking();
   speechSynthesis.speak(u);
+  // Fake some movement for the fallback since there's no audio node.
+  let t = 0;
+  const fake = setInterval(() => {
+    t += 1;
+    judgeImg.style.transform = "translateY(" + (-Math.abs(Math.sin(t / 3)) * 8).toFixed(1) + "px)";
+    if (voiceMode !== "robot" || !speechSynthesis.speaking) { clearInterval(fake); }
+  }, 90);
+}
+
+async function speak(text) {
+  if (muted) return;
+  stopTalking();
+  speechSynthesis && speechSynthesis.cancel();
+  try {
+    const r = await fetch("/api/say", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!r.ok) throw new Error("no-ai-voice");
+    const url = URL.createObjectURL(await r.blob());
+    if (!judgeAudio) {
+      judgeAudio = new Audio();
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = audioCtx.createMediaElementSource(judgeAudio);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      judgeAudio.onended = stopTalking;
+    } else {
+      if (judgeAudio.src.startsWith("blob:")) URL.revokeObjectURL(judgeAudio.src);
+    }
+    voiceMode = "ai";
+    voiceStatus.textContent = "🔥 Leon's voice (AI judge)";
+    judgeAudio.src = url;
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+    await judgeAudio.play();
+    judgeImg.classList.add("talking");
+    talkLoop();
+  } catch (e) {
+    legacySpeak(text);
+  }
 }
 document.getElementById("btn-mute").onclick = (e) => {
   muted = !muted;
-  if (muted) speechSynthesis.cancel();
+  if (muted) stopTalking();
   e.target.textContent = muted ? "Unmute" : "Mute";
 };
 document.getElementById("btn-replay").onclick = () => { if (lastVerdict) speak(lastVerdict); };
