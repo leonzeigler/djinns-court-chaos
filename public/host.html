@@ -11,7 +11,9 @@
   <header class="brand">
     <h1>⚖️ DJINN'S COURT CHAOS</h1>
     <div class="sub">Judge Djinn Ra presiding</div>
+    <button id="btn-music" class="btn small ghost" style="margin-top:8px">🎵 Music: Off</button>
   </header>
+  <audio id="bgm" loop preload="auto" src="court-chaos-theme.mp3"></audio>
 
   <!-- SETUP -->
   <div id="screen-setup" class="panel center">
@@ -94,6 +96,15 @@ function show(id) {
   ["screen-setup","screen-case","screen-verdict","screen-over"].forEach(s =>
     document.getElementById(s).classList.toggle("hidden", s !== id));
 }
+
+/* ---------- background music (original theme, royalty-free) ---------- */
+const bgm = document.getElementById("bgm");
+bgm.volume = 0.55;
+document.getElementById("btn-music").onclick = (e) => {
+  const btn = e.currentTarget;
+  if (bgm.paused) { bgm.play(); btn.textContent = "🎵 Music: On"; }
+  else { bgm.pause(); btn.textContent = "🎵 Music: Off"; }
+};
 
 /* ---------- setup ---------- */
 document.getElementById("btn-create").onclick = () => {
