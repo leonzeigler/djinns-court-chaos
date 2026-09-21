@@ -1,9 +1,9 @@
-// Judge Djinnra's verdict engine for Djinn's Court Chaos.
+// Judge Djinn Ra's verdict engine for Djinn's Court Chaos.
 //
-// Template-based verdicts in Djinnra's voice: confident, theatrical,
+// Template-based verdicts in Djinn Ra's voice: confident, theatrical,
 // gold-dread energy. Reads the actual arguments submitted and weaves
 // quotes into the ruling. The judging is gloriously chaotic — the side
-// with more arguments gets a slight edge, but Djinnra rules by vibe.
+// with more arguments gets a slight edge, but Djinn Ra rules by vibe.
 //
 // SWAP-IN POINT: to upgrade to a real LLM judge later, replace the body
 // of judgeVerdict() with a call to your LLM API (send the transcript,
@@ -20,35 +20,35 @@ function snippet(text, maxLen = 90) {
 }
 
 const OPENERS = [
-  "ORDER IN THE COURT! Djinnra has heard both sides, and the gold dreads don't lie.",
-  "*BANG BANG* — the gavel has spoken! Djinnra has weighed the evidence.",
-  "Court is now in session, and Judge Djinnra don't play about justice.",
-  "Djinnra reviewed every word. The verdict is in, and it is FINAL.",
-  "Silence! Djinnra has deliberated, and the streets demanded a ruling.",
+  "ORDER IN THE COURT! Djinn Ra has heard both sides, and the gold dreads don't lie.",
+  "*BANG BANG* — the gavel has spoken! Djinn Ra has weighed the evidence.",
+  "Court is now in session, and Judge Djinn Ra don't play about justice.",
+  "Djinn Ra reviewed every word. The verdict is in, and it is FINAL.",
+  "Silence! Djinn Ra has deliberated, and the streets demanded a ruling.",
 ];
 
 const QUIPS = [
   "When {name} said \"{quote}\" — the whole courtroom felt that.",
-  "{name} came in hot with \"{quote}\" and Djinnra respects the boldness.",
-  "Exhibit A: {name} testified \"{quote}\". Djinnra wrote that one down.",
+  "{name} came in hot with \"{quote}\" and Djinn Ra respects the boldness.",
+  "Exhibit A: {name} testified \"{quote}\". Djinn Ra wrote that one down.",
   "\"{quote}\" — {name}'s words, not mine. But they hit different.",
 ];
 
 const CLOSERS_WIN_P = [
   "The PLAINTIFF squad takes this round! Justice served, gold style.",
-  "Verdict: PLAINTIFF wins! Djinnra awards them the golden gavel.",
-  "The people have spoken through Djinnra — PLAINTIFF takes it!",
+  "Verdict: PLAINTIFF wins! Djinn Ra awards them the golden gavel.",
+  "The people have spoken through Djinn Ra — PLAINTIFF takes it!",
 ];
 
 const CLOSERS_WIN_D = [
   "The DEFENDANT squad takes this round! Case dismissed with style.",
-  "Verdict: DEFENDANT wins! Djinnra bangs the gavel — NOT guilty.",
-  "Against all odds, the DEFENSE prevails! Djinnra respects the hustle.",
+  "Verdict: DEFENDANT wins! Djinn Ra bangs the gavel — NOT guilty.",
+  "Against all odds, the DEFENSE prevails! Djinn Ra respects the hustle.",
 ];
 
 const NO_ARGUMENT_QUIPS = [
-  "Nobody said a WORD. Djinnra had to judge based on vibes alone. Chaotic. Iconic.",
-  "Both sides went silent. Djinnra flipped a gold coin. Justice is blind AND spontaneous.",
+  "Nobody said a WORD. Djinn Ra had to judge based on vibes alone. Chaotic. Iconic.",
+  "Both sides went silent. Djinn Ra flipped a gold coin. Justice is blind AND spontaneous.",
 ];
 
 function judgeVerdict(room) {
@@ -81,7 +81,7 @@ function judgeVerdict(room) {
     if (loseArgs.length > 0 && Math.random() < 0.6) {
       const weak = pick(loseArgs);
       parts.push(
-        `Meanwhile, ${weak.name} tried it with "${snippet(weak.text, 60)}" — and Djinnra said: nice try, counselor.`
+        `Meanwhile, ${weak.name} tried it with "${snippet(weak.text, 60)}" — and Djinn Ra said: nice try, counselor.`
       );
     }
   }

@@ -1,5 +1,5 @@
 // Djinn's Court Chaos — game server.
-// Host screen + phones join via room code. Judge Djinnra delivers verdicts.
+// Host screen + phones join via room code. Judge Djinn Ra delivers verdicts.
 // Run: npm install && npm start  →  host: http://localhost:3000/host.html
 
 const express = require("express");
