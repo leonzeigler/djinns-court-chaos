@@ -10,7 +10,7 @@
 <div class="wrap">
   <header class="brand">
     <h1>⚖️ DJINN'S COURT CHAOS</h1>
-    <div class="sub">Judge Meta Man presiding</div>
+    <div class="sub">Judge Djinnra presiding</div>
   </header>
 
   <!-- SETUP -->
@@ -51,7 +51,7 @@
   <!-- VERDICT -->
   <div id="screen-verdict" class="hidden">
     <div class="panel judge-stage">
-      <img src="meta-man.png" alt="Judge Meta Man">
+      <img src="djinnra.png" alt="Judge Djinnra">
       <div class="winner-banner" id="winner-banner"></div>
       <div class="verdict-text" id="verdict-text"></div>
       <div class="voice-row">
@@ -208,12 +208,12 @@ socket.on("game-over", ({ scores, champion }) => {
     b.className = "winner-banner " + champion;
   }
   speak(champion === "draw"
-    ? "Court is adjourned! Meta Man declares this night a draw. Everybody wins. Everybody guilty."
-    : "Court is adjourned! Meta Man declares the " + champion + " the champions of the night! Justice has been served, gold style.");
+    ? "Court is adjourned! Djinnra declares this night a draw. Everybody wins. Everybody guilty."
+    : "Court is adjourned! Djinnra declares the " + champion + " the champions of the night! Justice has been served, gold style.");
 });
 document.getElementById("btn-new").onclick = () => location.reload();
 
-/* ---------- Judge Meta Man's voice ----------
+/* ---------- Judge Djinnra's voice ----------
    Uses the device's built-in speech voices (free, offline-capable).
    Pick the deepest male voice below — slowed + pitched low for that
    heavyweight-judge feel. For a true Brooklyn-accent voice, a voice

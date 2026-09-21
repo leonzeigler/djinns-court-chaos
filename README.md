@@ -2,7 +2,7 @@
 
 A party game for your Discord game nights. You host the courtroom on your
 stream/TV, players join from their phones with a room code or QR scan —
-no app, no download. Judge Meta Man hears the arguments and delivers
+no app, no download. Judge Djinnra hears the arguments and delivers
 the verdict. In his voice.
 
 ## Run it
@@ -35,11 +35,11 @@ Then:
 3. Host starts Case 1 → everyone sees the absurd charge.
 4. 75 seconds: each player submits one argument from their phone.
    Arguments appear live on the host screen.
-5. Host locks arguments → **Judge Meta Man delivers the verdict**,
+5. Host locks arguments → **Judge Djinnra delivers the verdict**,
    out loud, in his voice. Winner takes the round.
 6. Best of 3 cases → champion of the night. Gavel. Adjourned.
 
-## Judge Meta Man's voice
+## Judge Djinnra's voice
 
 The verdict screen has a **voice picker**. It defaults to the deepest
 male voice on the machine, slowed down and pitched low for that
@@ -53,10 +53,10 @@ Want the true Brooklyn-accent deep voice? That needs a voice API
 
 - `server.js` — game server (rooms, timers, scoring)
 - `cases.js` — the absurd case generator (add your own charges here!)
-- `judge.js` — Meta Man's verdict engine (template-based now;
+- `judge.js` — Djinnra's verdict engine (template-based now;
   swap in a real LLM judge later — same return shape)
 - `public/host.html` — the courtroom screen
 - `public/join.html` — the player screen
-- `public/meta-man.png` — the judge himself
+- `public/djinnra.png` — the judge himself
 - `test-game.js` — automated full-game test (`node test-game.js`
   while the server runs)
