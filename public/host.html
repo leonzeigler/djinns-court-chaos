@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Djinn's Court Chaos — Host</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <h1>⚖️ DJINN'S COURT CHAOS</h1>
+    <div class="sub">Judge Meta Man presiding</div>
+  </header>
+
+  <!-- SETUP -->
+  <div id="screen-setup" class="panel center">
+    <p class="muted">Open this page on your stream or TV.<br>Players join from their phones — no app, no download.</p>
+    <button id="btn-create" class="btn">Create Courtroom</button>
+    <div id="lobby" class="hidden">
+      <div class="room-code" id="room-code">----</div>
+      <p class="muted">Players: open this page's address + <b>/join.html</b><br>on your phone and enter the code — or scan:</p>
+      <div id="qrbox"></div>
+      <div class="teams">
+        <div class="team plaintiff panel"><h3>⚖️ PLAINTIFF</h3><ul id="list-p"></ul></div>
+        <div class="team defendant panel"><h3>🛡️ DEFENDANT</h3><ul id="list-d"></ul></div>
+      </div>
+      <button id="btn-start" class="btn mt" disabled>Start Case 1</button>
+      <p class="muted" id="lobby-hint">Waiting for at least 2 players…</p>
+    </div>
+  </div>
+
+  <!-- CASE -->
+  <div id="screen-case" class="hidden">
+    <div class="panel case-card">
+      <div class="ctitle" id="case-title">CASE #0000 — ROUND 1</div>
+      <h2 id="case-charge"></h2>
+      <p id="case-detail" class="muted"></p>
+    </div>
+    <div class="panel">
+      <div class="timertext" id="timer-text">75</div>
+      <div class="timerbar"><div id="timer-fill"></div></div>
+      <div class="center"><button id="btn-lock" class="btn ghost">🔒 Lock Arguments</button></div>
+    </div>
+    <div class="feed">
+      <div class="panel"><h3 style="color:var(--plaintiff)">⚖️ PLAINTIFF</h3><div id="feed-p"></div></div>
+      <div class="panel"><h3 style="color:var(--defendant)">🛡️ DEFENDANT</h3><div id="feed-d"></div></div>
+    </div>
+  </div>
+
+  <!-- VERDICT -->
+  <div id="screen-verdict" class="hidden">
+    <div class="panel judge-stage">
+      <img src="meta-man.png" alt="Judge Meta Man">
+      <div class="winner-banner" id="winner-banner"></div>
+      <div class="verdict-text" id="verdict-text"></div>
+      <div class="voice-row">
+        <span class="lbl">🎙️ JUDGE'S VOICE</span>
+        <select id="voice-select"></select>
+        <button id="btn-mute" class="btn small ghost">Mute</button>
+        <button id="btn-replay" class="btn small ghost">↻ Replay verdict</button>
+      </div>
+      <div class="scoreboard">
+        <div class="score"><div class="n" id="score-p">0</div><div class="t">PLAINTIFF</div></div>
+        <div class="score"><div class="n" id="score-d">0</div><div class="t">DEFENDANT</div></div>
+      </div>
+      <button id="btn-next" class="btn mt">Next Case →</button>
+      <button id="btn-end" class="btn ghost mt">End Game</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div id="screen-over" class="hidden">
+    <div class="panel center">
+      <h2 style="color:var(--gold)">🏆 COURT ADJOURNED 🏆</h2>
+      <div class="winner-banner" id="champion-banner"></div>
+      <div class="scoreboard">
+        <div class="score"><div class="n" id="final-p">0</div><div class="t">PLAINTIFF</div></div>
+        <div class="score"><div class="n" id="final-d">0</div><div class="t">DEFENDANT</div></div>
+      </div>
+      <button id="btn-new" class="btn mt">New Game</button>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const socket = io();
+let code = null, timerInt = null, muted = false, lastVerdict = "";
+
+/* ---------- screens ---------- */
+function show(id) {
+  ["screen-setup","screen-case","screen-verdict","screen-over"].forEach(s =>
+    document.getElementById(s).classList.toggle("hidden", s !== id));
+}
+
+/* ---------- setup ---------- */
+document.getElementById("btn-create").onclick = () => {
+  socket.emit("create-room", ({ code: c }) => {
+    code = c;
+    document.getElementById("btn-create").classList.add("hidden");
+    document.getElementById("lobby").classList.remove("hidden");
+    document.getElementById("room-code").textContent = code;
+    const joinUrl = location.origin + "/join.html?code=" + code;
+    new QRCode(document.getElementById("qrbox"), { text: joinUrl, width: 170, height: 170 });
+  });
+};
+// Re-attach if the page was refreshed mid-game.
+window.addEventListener("load", () => {
+  const saved = sessionStorage.getItem("dcc-code");
+  if (saved) {
+    socket.emit("host-join", { code: saved }, (res) => {
+      if (res.ok) { code = saved; applyState(res.state); }
+    });
+  }
+});
+
+socket.on("players-updated", ({ players }) => renderPlayers(players));
+function renderPlayers(players) {
+  const p = document.getElementById("list-p"), d = document.getElementById("list-d");
+  p.innerHTML = ""; d.innerHTML = "";
+  players.forEach(pl => {
+    const li = document.createElement("li");
+    li.textContent = pl.name;
+    (pl.team === "plaintiff" ? p : d).appendChild(li);
+  });
+  const ok = players.length >= 2;
+  document.getElementById("btn-start").disabled = !ok;
+  document.getElementById("lobby-hint").textContent = ok
+    ? players.length + " players in the courtroom — ready!"
+    : "Waiting for at least 2 players…";
+}
+
+document.getElementById("btn-start").onclick = () => {
+  socket.emit("start-case", (res) => { if (res && res.error) alert(res.error); });
+};
+
+/* ---------- case ---------- */
+socket.on("case-started", ({ round, case: c, argueSeconds }) => {
+  sessionStorage.setItem("dcc-code", code);
+  show("screen-case");
+  document.getElementById("case-title").textContent = c.title + " — ROUND " + round;
+  document.getElementById("case-charge").textContent = "Charge: " + c.charge;
+  document.getElementById("case-detail").textContent = c.detail;
+  document.getElementById("feed-p").innerHTML = "";
+  document.getElementById("feed-d").innerHTML = "";
+  startTimer(argueSeconds);
+});
+
+function startTimer(total) {
+  clearInterval(timerInt);
+  let left = total;
+  const fill = document.getElementById("timer-fill"), txt = document.getElementById("timer-text");
+  const tick = () => {
+    txt.textContent = left;
+    fill.style.width = (left / total * 100) + "%";
+    if (left <= 0) clearInterval(timerInt);
+    left--;
+  };
+  tick();
+  timerInt = setInterval(tick, 1000);
+}
+
+socket.on("argument", ({ name, team, text }) => addArg(name, team, text));
+function addArg(name, team, text) {
+  const div = document.createElement("div");
+  div.className = "arg " + team;
+  div.innerHTML = `<div class="who">${escapeHtml(name)}</div>${escapeHtml(text)}`;
+  document.getElementById(team === "plaintiff" ? "feed-p" : "feed-d").appendChild(div);
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+document.getElementById("btn-lock").onclick = () => socket.emit("lock-arguments");
+socket.on("arguments-locked", () => {
+  clearInterval(timerInt);
+  document.getElementById("timer-text").textContent = "🔒";
+  // Auto-send to the judge after a beat.
+  setTimeout(() => socket.emit("request-verdict"), 1200);
+});
+
+/* ---------- verdict ---------- */
+socket.on("verdict", ({ verdict, winner, scores }) => {
+  lastVerdict = verdict;
+  show("screen-verdict");
+  const banner = document.getElementById("winner-banner");
+  banner.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS" : "🛡️ DEFENDANT WINS";
+  banner.className = "winner-banner " + winner;
+  document.getElementById("verdict-text").textContent = verdict;
+  document.getElementById("score-p").textContent = scores.plaintiff;
+  document.getElementById("score-d").textContent = scores.defendant;
+  speak(verdict);
+});
+
+document.getElementById("btn-next").onclick = () => socket.emit("next-case");
+document.getElementById("btn-end").onclick = () => socket.emit("end-game");
+
+socket.on("game-over", ({ scores, champion }) => {
+  show("screen-over");
+  document.getElementById("final-p").textContent = scores.plaintiff;
+  document.getElementById("final-d").textContent = scores.defendant;
+  const b = document.getElementById("champion-banner");
+  if (champion === "draw") { b.textContent = "🤝 IT'S A DRAW"; b.className = "winner-banner"; }
+  else {
+    b.textContent = champion === "plaintiff" ? "⚖️ PLAINTIFF TAKES THE NIGHT" : "🛡️ DEFENDANT TAKES THE NIGHT";
+    b.className = "winner-banner " + champion;
+  }
+  speak(champion === "draw"
+    ? "Court is adjourned! Meta Man declares this night a draw. Everybody wins. Everybody guilty."
+    : "Court is adjourned! Meta Man declares the " + champion + " the champions of the night! Justice has been served, gold style.");
+});
+document.getElementById("btn-new").onclick = () => location.reload();
+
+/* ---------- Judge Meta Man's voice ----------
+   Uses the device's built-in speech voices (free, offline-capable).
+   Pick the deepest male voice below — slowed + pitched low for that
+   heavyweight-judge feel. For a true Brooklyn-accent voice, a voice
+   API (e.g. ElevenLabs) can be wired into speak() later. */
+const voiceSelect = document.getElementById("voice-select");
+let voices = [];
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  voiceSelect.innerHTML = "";
+  // Prefer deep male US voices first.
+  const scored = voices.map((v, i) => {
+    const n = (v.name + " " + v.lang).toLowerCase();
+    let s = 0;
+    if (n.includes("en-us")) s += 3;
+    else if (n.includes("en")) s += 1;
+    if (/david|james|guy|daniel|fred|alex|victor|marcus|deep|male/.test(n)) s += 4;
+    if (/female|samantha|zira|karen|moira|tessa/.test(n)) s -= 5;
+    return { v, i, s };
+  }).sort((a, b) => b.s - a.s);
+  scored.forEach(({ v, i }) => {
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = v.name + " (" + v.lang + ")";
+    voiceSelect.appendChild(o);
+  });
+  if (scored.length) voiceSelect.value = scored[0].i;
+}
+if ("speechSynthesis" in window) {
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+} else {
+  voiceSelect.innerHTML = "<option>Voice not supported on this device</option>";
+}
+
+function speak(text) {
+  if (muted || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = voices[parseInt(voiceSelect.value, 10)];
+  if (v) u.voice = v;
+  u.rate = 0.92;   // measured, deliberate judge cadence
+  u.pitch = 0.65;  // deep
+  u.volume = 1;
+  speechSynthesis.speak(u);
+}
+document.getElementById("btn-mute").onclick = (e) => {
+  muted = !muted;
+  if (muted) speechSynthesis.cancel();
+  e.target.textContent = muted ? "Unmute" : "Mute";
+};
+document.getElementById("btn-replay").onclick = () => { if (lastVerdict) speak(lastVerdict); };
+
+/* ---------- re-sync ---------- */
+socket.on("room-state", (st) => applyState(st));
+function applyState(st) {
+  if (st.phase === "lobby") {
+    show("screen-setup");
+    document.getElementById("btn-create").classList.add("hidden");
+    document.getElementById("lobby").classList.remove("hidden");
+    document.getElementById("room-code").textContent = st.code;
+    renderPlayers(st.players);
+  } else if (st.phase === "argue") {
+    show("screen-case");
+    document.getElementById("case-title").textContent = st.case.title + " — ROUND " + st.round;
+    document.getElementById("case-charge").textContent = "Charge: " + st.case.charge;
+    document.getElementById("case-detail").textContent = st.case.detail;
+    document.getElementById("feed-p").innerHTML = "";
+    document.getElementById("feed-d").innerHTML = "";
+    st.args.forEach(a => addArg(a.name, a.team, a.text));
+    startTimer(st.secondsLeft || st.argueSeconds);
+  }
+}
+</script>
+</body>
+</html>

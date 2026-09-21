@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.19.2","socket.io":"^4.8.1"},"description":"Djinn's Court Chaos — party game where phones join the host screen and Judge Meta Man delivers the verdict.","devDependencies":{"socket.io-client":"^4.8.1"},"main":"server.js","name":"djinns-court-chaos","scripts":{"start":"node server.js"},"version":"1.0.0"}

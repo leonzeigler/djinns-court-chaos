@@ -1,0 +1,193 @@
+/* Djinn's Court Chaos — black & gold courtroom theme */
+:root {
+  --gold: #f5c518;
+  --gold-deep: #b8860b;
+  --black: #0d0d0d;
+  --panel: #161616;
+  --panel2: #1f1f1f;
+  --text: #f2ead8;
+  --muted: #a89e86;
+  --plaintiff: #f5c518;
+  --defendant: #4da3ff;
+  --danger: #ff5a5a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 600px at 50% -10%, #2a220e 0%, var(--black) 60%);
+  color: var(--text);
+  font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
+  min-height: 100vh;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 60px; }
+
+header.brand { text-align: center; margin: 10px 0 22px; }
+header.brand h1 {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 46px);
+  letter-spacing: 2px;
+  color: var(--gold);
+  text-shadow: 0 0 24px rgba(245, 197, 24, 0.35);
+}
+header.brand .sub {
+  color: var(--muted);
+  letter-spacing: 3px;
+  font-size: 13px;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid #3a2f12;
+  border-radius: 14px;
+  padding: 20px;
+  margin: 14px 0;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.5);
+}
+
+.btn {
+  display: inline-block;
+  background: linear-gradient(180deg, var(--gold), var(--gold-deep));
+  color: #111;
+  border: none;
+  border-radius: 10px;
+  padding: 14px 26px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  text-transform: uppercase;
+  box-shadow: 0 4px 0 #6e5207, 0 8px 18px rgba(245, 197, 24, 0.25);
+  transition: transform 0.08s ease;
+}
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #6e5207; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn.ghost {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--gold);
+  box-shadow: none;
+}
+.btn.small { padding: 9px 16px; font-size: 13px; }
+
+input[type="text"], textarea {
+  width: 100%;
+  background: var(--panel2);
+  border: 1px solid #4a3d18;
+  color: var(--text);
+  border-radius: 10px;
+  padding: 13px 14px;
+  font-size: 16px;
+  font-family: inherit;
+}
+input[type="text"]:focus, textarea:focus { outline: 2px solid var(--gold); }
+textarea { min-height: 110px; resize: vertical; }
+label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 1px; }
+
+.room-code {
+  font-size: clamp(48px, 12vw, 96px);
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: var(--gold);
+  text-align: center;
+  margin: 6px 0;
+  text-shadow: 0 0 30px rgba(245, 197, 24, 0.4);
+}
+
+.teams { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .teams { grid-template-columns: 1fr; } }
+.team h3 { margin: 0 0 10px; letter-spacing: 2px; font-size: 15px; }
+.team.plaintiff h3 { color: var(--plaintiff); }
+.team.defendant h3 { color: var(--defendant); }
+.team ul { list-style: none; margin: 0; padding: 0; }
+.team li {
+  background: var(--panel2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  font-size: 15px;
+}
+
+.case-card { border-left: 5px solid var(--gold); }
+.case-card .ctitle { color: var(--muted); font-size: 13px; letter-spacing: 2px; }
+.case-card h2 { margin: 8px 0; color: var(--gold); font-size: clamp(20px, 4vw, 30px); }
+.case-card p { font-size: 16px; line-height: 1.5; }
+
+.timerbar { height: 12px; background: #2a2a2a; border-radius: 6px; overflow: hidden; margin: 12px 0; }
+.timerbar > div { height: 100%; background: linear-gradient(90deg, var(--gold), #ff8c00); width: 100%; transition: width 1s linear; }
+.timertext { text-align: center; font-size: 22px; font-weight: 800; color: var(--gold); }
+
+.feed { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .feed { grid-template-columns: 1fr; } }
+.arg {
+  background: var(--panel2);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.45;
+  animation: slidein 0.3s ease;
+  border-left: 4px solid var(--gold);
+}
+.arg.defendant { border-left-color: var(--defendant); }
+.arg .who { font-size: 12px; color: var(--muted); margin-bottom: 4px; letter-spacing: 1px; }
+@keyframes slidein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+.judge-stage { text-align: center; }
+.judge-stage img {
+  width: min(300px, 60vw);
+  border-radius: 18px;
+  border: 3px solid var(--gold);
+  box-shadow: 0 0 50px rgba(245, 197, 24, 0.35);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+.verdict-text {
+  font-size: clamp(17px, 3.4vw, 23px);
+  line-height: 1.65;
+  background: var(--panel2);
+  border-radius: 12px;
+  padding: 20px;
+  margin: 18px auto;
+  max-width: 800px;
+  border: 1px solid #4a3d18;
+}
+.winner-banner {
+  font-size: clamp(24px, 6vw, 44px);
+  font-weight: 900;
+  letter-spacing: 3px;
+  margin: 10px 0;
+}
+.winner-banner.plaintiff { color: var(--plaintiff); }
+.winner-banner.defendant { color: var(--defendant); }
+
+.scoreboard { display: flex; gap: 14px; justify-content: center; margin: 12px 0; }
+.score {
+  background: var(--panel2);
+  border-radius: 12px;
+  padding: 12px 26px;
+  text-align: center;
+  min-width: 130px;
+}
+.score .n { font-size: 34px; font-weight: 900; color: var(--gold); }
+.score .t { font-size: 12px; color: var(--muted); letter-spacing: 2px; }
+
+#qrbox { display: flex; justify-content: center; margin: 12px 0; }
+#qrbox img { border: 6px solid #fff; border-radius: 8px; }
+
+.center { text-align: center; }
+.mt { margin-top: 18px; }
+.muted { color: var(--muted); }
+.hidden { display: none !important; }
+
+.voice-row { display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 14px; }
+.voice-row select {
+  background: var(--panel2); color: var(--text);
+  border: 1px solid #4a3d18; border-radius: 8px; padding: 8px 10px; font-size: 14px;
+  max-width: 280px;
+}
+.voice-row .lbl { font-size: 12px; color: var(--muted); letter-spacing: 1px; }

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Djinn's Court Chaos — Join</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="brand">
+    <h1>⚖️ DJINN'S COURT CHAOS</h1>
+    <div class="sub">Judge Meta Man presiding</div>
+  </header>
+
+  <!-- JOIN -->
+  <div id="p-join" class="panel">
+    <label>Room code</label>
+    <input type="text" id="in-code" maxlength="4" placeholder="ABCD" autocapitalize="characters" autocomplete="off">
+    <label>Your name</label>
+    <input type="text" id="in-name" maxlength="16" placeholder="e.g. Big Dre" autocomplete="off">
+    <button id="btn-join" class="btn mt" style="width:100%">Enter the Courtroom</button>
+    <p class="muted center" id="join-err"></p>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="p-lobby" class="panel center hidden">
+    <h2 id="team-label"></h2>
+    <p class="muted">You're in! Wait for the host to start the case.</p>
+    <div class="teams">
+      <div class="team plaintiff panel"><h3>⚖️ PLAINTIFF</h3><ul id="plist-p"></ul></div>
+      <div class="team defendant panel"><h3>🛡️ DEFENDANT</h3><ul id="plist-d"></ul></div>
+    </div>
+  </div>
+
+  <!-- ARGUE -->
+  <div id="p-argue" class="hidden">
+    <div class="panel case-card">
+      <div class="ctitle" id="pcase-title"></div>
+      <h2 id="pcase-charge"></h2>
+      <p id="pcase-detail" class="muted"></p>
+    </div>
+    <div class="panel">
+      <div class="timertext" id="p-timer">75</div>
+      <label>Your argument, counselor (<span id="charcount">0</span>/280)</label>
+      <textarea id="in-arg" maxlength="280" placeholder="Make your case… be wild, be funny, win the judge."></textarea>
+      <button id="btn-arg" class="btn mt" style="width:100%">🎤 Submit Argument</button>
+      <p class="muted center" id="arg-err"></p>
+    </div>
+  </div>
+
+  <!-- LOCKED -->
+  <div id="p-locked" class="panel center hidden">
+    <h2>🔒 Arguments locked</h2>
+    <p class="muted">Judge Meta Man is deliberating…</p>
+    <img src="meta-man.png" alt="Judge Meta Man" style="width:150px;border-radius:14px;border:2px solid var(--gold)">
+  </div>
+
+  <!-- VERDICT -->
+  <div id="p-verdict" class="panel center hidden">
+    <div class="winner-banner" id="p-winner"></div>
+    <div class="verdict-text" id="p-verdict-text" style="text-align:left"></div>
+    <p class="muted">Next case starting soon…</p>
+  </div>
+
+  <!-- OVER -->
+  <div id="p-over" class="panel center hidden">
+    <h2 style="color:var(--gold)">🏆 COURT ADJOURNED</h2>
+    <div class="winner-banner" id="p-champion"></div>
+    <div class="scoreboard">
+      <div class="score"><div class="n" id="p-final-p">0</div><div class="t">PLAINTIFF</div></div>
+      <div class="score"><div class="n" id="p-final-d">0</div><div class="t">DEFENDANT</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let myTeam = null, myName = null;
+
+function show(id) {
+  ["p-join","p-lobby","p-argue","p-locked","p-verdict","p-over"].forEach(s =>
+    document.getElementById(s).classList.toggle("hidden", s !== id));
+}
+
+// Pre-fill code from ?code=ABCD
+const params = new URLSearchParams(location.search);
+if (params.get("code")) document.getElementById("in-code").value = params.get("code").toUpperCase();
+
+document.getElementById("btn-join").onclick = () => {
+  const code = document.getElementById("in-code").value.trim().toUpperCase();
+  const name = document.getElementById("in-name").value.trim() || "Player";
+  document.getElementById("join-err").textContent = "";
+  socket.emit("join-room", { code, name }, (res) => {
+    if (res.error) { document.getElementById("join-err").textContent = res.error; return; }
+    myTeam = res.team; myName = res.name;
+    const tl = document.getElementById("team-label");
+    tl.textContent = myTeam === "plaintiff" ? "⚖️ You are PLAINTIFF" : "🛡️ You are DEFENDANT";
+    tl.style.color = myTeam === "plaintiff" ? "var(--plaintiff)" : "var(--defendant)";
+    applyState(res.state);
+  });
+};
+
+socket.on("players-updated", ({ players }) => {
+  const p = document.getElementById("plist-p"), d = document.getElementById("plist-d");
+  p.innerHTML = ""; d.innerHTML = "";
+  players.forEach(pl => {
+    const li = document.createElement("li");
+    li.textContent = pl.name + (pl.name === myName ? " (you)" : "");
+    (pl.team === "plaintiff" ? p : d).appendChild(li);
+  });
+});
+
+socket.on("case-started", ({ round, case: c, argueSeconds }) => {
+  show("p-argue");
+  document.getElementById("pcase-title").textContent = c.title + " — ROUND " + round;
+  document.getElementById("pcase-charge").textContent = "Charge: " + c.charge;
+  document.getElementById("pcase-detail").textContent = c.detail;
+  const ta = document.getElementById("in-arg");
+  ta.value = ""; ta.disabled = false;
+  document.getElementById("charcount").textContent = "0";
+  const btn = document.getElementById("btn-arg");
+  btn.disabled = false; btn.textContent = "🎤 Submit Argument";
+  document.getElementById("arg-err").textContent = "";
+  let left = argueSeconds;
+  const el = document.getElementById("p-timer");
+  clearInterval(window._pt);
+  window._pt = setInterval(() => { el.textContent = left; if (left <= 0) clearInterval(window._pt); left--; }, 1000);
+});
+
+document.getElementById("in-arg").addEventListener("input", (e) => {
+  document.getElementById("charcount").textContent = e.target.value.length;
+});
+
+document.getElementById("btn-arg").onclick = () => {
+  const text = document.getElementById("in-arg").value.trim();
+  socket.emit("submit-argument", { text }, (res) => {
+    if (res.error) { document.getElementById("arg-err").textContent = res.error; return; }
+    const btn = document.getElementById("btn-arg");
+    btn.disabled = true; btn.textContent = "✅ Argument submitted!";
+    document.getElementById("in-arg").disabled = true;
+  });
+};
+
+socket.on("arguments-locked", () => show("p-locked"));
+
+socket.on("verdict", ({ verdict, winner, scores }) => {
+  show("p-verdict");
+  const b = document.getElementById("p-winner");
+  b.textContent = winner === "plaintiff" ? "⚖️ PLAINTIFF WINS" : "🛡️ DEFENDANT WINS";
+  b.className = "winner-banner " + winner;
+  document.getElementById("p-verdict-text").textContent = verdict;
+});
+
+socket.on("game-over", ({ scores, champion }) => {
+  show("p-over");
+  document.getElementById("p-final-p").textContent = scores.plaintiff;
+  document.getElementById("p-final-d").textContent = scores.defendant;
+  const b = document.getElementById("p-champion");
+  if (champion === "draw") { b.textContent = "🤝 IT'S A DRAW"; b.className = "winner-banner"; }
+  else {
+    b.textContent = champion === "plaintiff" ? "⚖️ PLAINTIFF TAKES THE NIGHT" : "🛡️ DEFENDANT TAKES THE NIGHT";
+    b.className = "winner-banner " + champion;
+  }
+});
+
+socket.on("room-state", (st) => applyState(st));
+function applyState(st) {
+  if (st.phase === "lobby") show("p-lobby");
+  else if (st.phase === "over") show("p-over");
+}
+</script>
+</body>
+</html>
