@@ -32,6 +32,8 @@
   .cbubble.plaintiff b { color: #f5c518; }
   .cbubble.defendant { border-color: #4da3ff; }
   .cbubble.defendant b { color: #4da3ff; }
+  .cbubble.jury { border-color: #c9a0ff; }
+  .cbubble.jury b { color: #c9a0ff; }
   /* let the courtroom glow through the panels */
   .panel { background: rgba(14,10,6,.88); }
   #jury-list .arg { margin-bottom: 8px; }
@@ -41,12 +43,10 @@
 <div id="court3d"></div>
 <div id="court-bubbles"></div>
 <div id="court-flash"></div>
+<!-- one title treatment only — the wall sign inside the 3D courtroom carries it;
+     music lives in a small corner button so the front screen stays clean -->
+<button id="btn-music" class="btn small ghost" style="position:fixed;top:12px;right:12px;z-index:50;margin:0">🎵 Music: Off</button>
 <div class="wrap">
-  <header class="brand">
-    <h1 class="game-title"><span class="scales">⚖️</span> DJINN'S HOOD COURT</h1>
-    <div class="sub">Judge Djinn Ra presiding</div>
-    <button id="btn-music" class="btn small ghost" style="margin-top:8px">🎵 Music: Off</button>
-  </header>
   <audio id="bgm" loop preload="auto" src="hood-court-theme.mp3"></audio>
 
   <!-- SETUP -->
@@ -88,6 +88,7 @@
       </div>
       <div class="center hidden" id="jury-row">
         <h2 style="color:var(--gold)">🧑‍⚖️ THE JURY DELIBERATES 🧑‍⚖️</h2>
+        <div id="jury-roster" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:680px;margin:0 auto 10px"></div>
         <p class="muted" id="jury-status">The six jurors are weighing four rounds of arguments…</p>
         <div id="jury-list" style="text-align:left;max-width:620px;margin:0 auto"></div>
         <h3 id="jury-tally" class="hidden" style="color:var(--gold)"></h3>
@@ -220,6 +221,13 @@ function renderPlayers(players) {
   document.getElementById("lobby-hint").textContent = ok
     ? players.length + " players in the courtroom — ready!"
     : "Waiting for at least 2 players…";
+  // The 3D plaintiff/defendant figures wear the first player name per side.
+  court(c => {
+    const p0 = players.find(p => p.team === "plaintiff");
+    const d0 = players.find(p => p.team === "defendant");
+    c.setContestantName("plaintiff", p0 ? p0.name : "PLAINTIFF");
+    c.setContestantName("defendant", d0 ? d0.name : "DEFENDANT");
+  });
 }
 
 document.getElementById("btn-start").onclick = () => {
@@ -262,8 +270,66 @@ function startTimer(total) {
 
 socket.on("argument", ({ name, team, text, round }) => {
   addArg(name, team, text, round);
-  court(c => c.showArgument(team, name, text));
+  court(c => { c.showArgument(team, name, text); c.contestantSpeak(team); });
+  maybeJurorReact(text);
 });
+
+/* ---------- juror outbursts ----------
+   When an argument is outrageous (spicy words, ALL CAPS, !!!), or just by
+   chaos luck, a random juror blurts a reaction — bubble over their head in
+   3D plus a voice line in their own pitch. Max one every 8 seconds. */
+const JUROR_REACTIONS = [
+  { name: "Big Mama Ruth", pitch: 1.1, rate: 0.92, lines: [
+    "That's a damn shame.", "Lord have mercy.", "Well, I declare!",
+    "Mm-mm-mm. Not in MY church.", "Baby, that is a MESS." ] },
+  { name: "Unc", pitch: 0.6, rate: 0.9, lines: [
+    "Sheeeit.", "Say it with your chest!", "I've seen some things, but DAMN.",
+    "That's cold-blooded right there." ] },
+  { name: "Keisha", pitch: 1.45, rate: 1.05, lines: [
+    "Oh, they did NOT just say that.", "Clocked it!", "The AUDACITY.",
+    "Boo, that is messy." ] },
+  { name: "Deacon Frye", pitch: 0.7, rate: 1.0, lines: [
+    "Can I get a witness?!", "The courtroom TREMBLES!", "Lawd, the LIES!",
+    "Somebody call the ushers!" ] },
+  { name: "Lil Tee", pitch: 1.0, rate: 1.2, lines: [
+    "Nooo, that's crazy!", "Clip it! Clip it!", "Ain't no way!",
+    "That's actually hilarious." ] },
+  { name: "Miss Petty", pitch: 1.3, rate: 1.0, lines: [
+    "Rude. But go off.", "I'm still mad about it.", "Petty, but factual.",
+    "Oh, we're doing THIS today?" ] },
+];
+let lastJurorReaction = 0;
+function isOutrageous(text) {
+  const t = (text || "").toLowerCase();
+  const spicy = ["damn","hell","shit","ass ","bitch","steal","stole","stolen","lie","liar","lied",
+    "cheat","fraud","scam","busted","caught","jail","arrest","punch","fight","knife","gun",
+    "dead","kill","divorce","affair","sue","owe","drunk","high "];
+  if (spicy.some(w => t.includes(w))) return true;
+  const letters = text.replace(/[^a-zA-Z]/g, "");
+  const caps = text.replace(/[^A-Z]/g, "");
+  if (letters.length > 20 && caps.length / letters.length > 0.6) return true; // ALL CAPS rant
+  if ((text.match(/!/g) || []).length >= 3) return true;                       // !!! energy
+  return false;
+}
+function maybeJurorReact(text) {
+  const now = performance.now();
+  if (now - lastJurorReaction < 8000) return;               // cooldown
+  if (!isOutrageous(text) && Math.random() > 0.15) return;  // chaos luck
+  lastJurorReaction = now;
+  const i = Math.floor(Math.random() * JUROR_REACTIONS.length);
+  const jr = JUROR_REACTIONS[i];
+  const line = jr.lines[Math.floor(Math.random() * jr.lines.length)];
+  court(c => c.showJurorReaction(i, jr.name, line));
+  // Voice: each juror gets their own pitch/rate on the device voice —
+  // no API key, no cost, and it never clashes with the judge's AI voice.
+  if (!muted && "speechSynthesis" in window) {
+    try {
+      const u = new SpeechSynthesisUtterance(line);
+      u.pitch = jr.pitch; u.rate = jr.rate;
+      speechSynthesis.speak(u);
+    } catch (e) { /* silent jury */ }
+  }
+}
 function addArg(name, team, text, round) {
   const div = document.createElement("div");
   div.className = "arg " + team;
@@ -329,6 +395,15 @@ socket.on("jury-votes", ({ votes, tally }) => {
   });
   juryTimers.forEach(clearTimeout); juryTimers = [];
   document.getElementById("jury-list").innerHTML = "";
+  // Meet the jury: name + personality blurb chips
+  const roster = document.getElementById("jury-roster");
+  roster.innerHTML = "";
+  votes.forEach(v => {
+    const chip = document.createElement("div");
+    chip.style.cssText = "background:rgba(20,14,8,.9);border:1px solid var(--gold);border-radius:10px;padding:6px 10px;font-size:12px;max-width:200px;text-align:left";
+    chip.innerHTML = `<b style="color:var(--gold)">${escapeHtml(v.name)}</b><br><span class="muted" style="font-size:11px">${escapeHtml(v.blurb || "")}</span>`;
+    roster.appendChild(chip);
+  });
   document.getElementById("jury-tally").classList.add("hidden");
   document.getElementById("btn-ruling").classList.add("hidden");
   document.getElementById("jury-status").textContent = "The jury is voting…";

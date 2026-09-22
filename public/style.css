@@ -266,3 +266,28 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
   max-width: 280px;
 }
 .voice-row .lbl { font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+
+/* ---------- Voice answers: big mic button, no typing ---------- */
+.mic-btn {
+  width: 110px; height: 110px; border-radius: 50%;
+  font-size: 48px; border: 3px solid var(--gold);
+  background: #1a1a1a; cursor: pointer; margin: 12px auto; display: block;
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+.mic-btn:active { transform: scale(.94); }
+.mic-btn:disabled { opacity: .45; cursor: default; }
+.mic-btn.listening {
+  background: #3a1212; border-color: #ff5252;
+  animation: micpulse 1.2s infinite;
+}
+@keyframes micpulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,82,82,.5); }
+  70% { box-shadow: 0 0 0 22px rgba(255,82,82,0); }
+  100% { box-shadow: 0 0 0 0 rgba(255,82,82,0); }
+}
+.transcript {
+  min-height: 60px; padding: 10px 14px; margin-top: 10px;
+  background: #141414; border: 1px solid #333; border-radius: 10px;
+  font-style: italic; color: #ddd; text-align: left;
+}
+.transcript:empty { display: none; }

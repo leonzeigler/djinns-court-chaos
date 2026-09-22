@@ -41,11 +41,12 @@
       <h2 id="pcase-charge"></h2>
       <p id="pcase-detail" class="muted"></p>
     </div>
-    <div class="panel">
+    <div class="panel center">
       <div class="timertext" id="p-timer">75</div>
-      <label>Your argument, counselor (<span id="charcount">0</span>/280)</label>
-      <textarea id="in-arg" maxlength="280" placeholder="Make your case… be wild, be funny, win the judge."></textarea>
-      <button id="btn-arg" class="btn mt" style="width:100%">🎤 Submit Argument</button>
+      <p class="muted">Your argument, counselor — <b>speak it, don't type it.</b></p>
+      <button id="btn-mic" class="mic-btn" aria-label="Record your argument">🎤</button>
+      <p id="mic-status" class="muted">Tap the mic and make your case…</p>
+      <div id="mic-transcript" class="transcript"></div>
       <p class="muted center" id="arg-err"></p>
     </div>
   </div>
@@ -126,30 +127,90 @@ socket.on("case-started", ({ round, maxRounds, case: c, argueSeconds }) => {
     c.title + " — ROUND " + round + " OF " + (maxRounds || 4);
   document.getElementById("pcase-charge").textContent = "Charge: " + c.charge;
   document.getElementById("pcase-detail").textContent = c.detail;
-  const ta = document.getElementById("in-arg");
-  ta.value = ""; ta.disabled = false;
-  document.getElementById("charcount").textContent = "0";
-  const btn = document.getElementById("btn-arg");
-  btn.disabled = false; btn.textContent = "🎤 Submit Argument";
-  document.getElementById("arg-err").textContent = "";
+  resetMic();
   let left = argueSeconds;
   const el = document.getElementById("p-timer");
   clearInterval(window._pt);
   window._pt = setInterval(() => { el.textContent = left; if (left <= 0) clearInterval(window._pt); left--; }, 1000);
 });
 
-document.getElementById("in-arg").addEventListener("input", (e) => {
-  document.getElementById("charcount").textContent = e.target.value.length;
-});
+/* ---------- Voice answers: speak, don't type ----------
+   Uses the phone/browser's built-in free speech recognition.
+   Tap the mic, make your case, tap again — words go to the judge. */
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
 
-document.getElementById("btn-arg").onclick = () => {
-  const text = document.getElementById("in-arg").value.trim();
-  socket.emit("submit-argument", { text }, (res) => {
-    if (res.error) { document.getElementById("arg-err").textContent = res.error; return; }
-    const btn = document.getElementById("btn-arg");
-    btn.disabled = true; btn.textContent = "✅ Argument submitted!";
-    document.getElementById("in-arg").disabled = true;
-  });
+function resetMic() {
+  if (rec && listening) { try { rec.stop(); } catch (_) {} }
+  listening = false;
+  const b = document.getElementById("btn-mic");
+  b.classList.remove("listening");
+  b.disabled = false;
+  document.getElementById("mic-status").textContent = "Tap the mic and make your case…";
+  document.getElementById("mic-transcript").textContent = "";
+  document.getElementById("arg-err").textContent = "";
+}
+
+document.getElementById("btn-mic").onclick = () => {
+  if (!SpeechRec) {
+    document.getElementById("arg-err").textContent =
+      "Voice isn't supported in this browser — try Chrome on your phone.";
+    return;
+  }
+  if (listening) { try { rec.stop(); } catch (_) {} return; } // tap again: finish & send
+  rec = new SpeechRec();
+  rec.lang = "en-US";
+  rec.interimResults = true;
+  rec.continuous = true;
+  let finalText = "";
+  rec.onresult = (e) => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t + " ";
+      else interim += t;
+    }
+    document.getElementById("mic-transcript").textContent = (finalText + interim).trim();
+  };
+  rec.onerror = (e) => {
+    listening = false;
+    document.getElementById("btn-mic").classList.remove("listening");
+    document.getElementById("mic-status").textContent =
+      e.error === "not-allowed" || e.error === "service-not-allowed"
+        ? "Mic blocked — allow microphone access, then tap the mic again."
+        : e.error === "no-speech"
+          ? "Didn't catch that — tap the mic and try again."
+          : "Voice hiccup (" + e.error + ") — tap the mic and try again.";
+  };
+  rec.onend = () => {
+    if (!listening) return; // already handled by onerror
+    listening = false;
+    document.getElementById("btn-mic").classList.remove("listening");
+    const text = document.getElementById("mic-transcript").textContent.trim().slice(0, 280);
+    if (!text) {
+      document.getElementById("mic-status").textContent = "Didn't catch that — tap the mic and try again.";
+      return;
+    }
+    document.getElementById("mic-status").textContent = "Sending your argument to the judge…";
+    socket.emit("submit-argument", { text }, (res) => {
+      if (res.error) {
+        document.getElementById("arg-err").textContent = res.error;
+        document.getElementById("mic-status").textContent = "Tap the mic to try again.";
+        return;
+      }
+      document.getElementById("btn-mic").disabled = true;
+      document.getElementById("mic-status").textContent = "✅ Argument submitted — the court heard you!";
+    });
+  };
+  try {
+    rec.start();
+  } catch (_) {
+    document.getElementById("arg-err").textContent = "Couldn't start the mic — tap again to retry.";
+    return;
+  }
+  listening = true;
+  document.getElementById("btn-mic").classList.add("listening");
+  document.getElementById("mic-status").textContent = "Listening… tap the mic again when you're done.";
 };
 
 socket.on("arguments-locked", ({ round, maxRounds }) => {
