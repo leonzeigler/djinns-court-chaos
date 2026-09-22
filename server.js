@@ -25,7 +25,7 @@ app.use(express.json({ limit: "64kb" }));
    Responses are cached on disk by (voice, text) hash. */
 const VOICE_CACHE = path.join(__dirname, ".voice-cache");
 try { fs.mkdirSync(VOICE_CACHE, { recursive: true }); } catch (_) {}
-const DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"; // deep male stock voice; replaced by Leon's clone
+const DEFAULT_VOICE_ID = "DZaTfsVlJ2F1k152TYf7"; // Leon's Court Chaos Instant Voice Clone; JUDGE_VOICE_ID env overrides
 
 app.post("/api/say", async (req, res) => {
   const text = String((req.body && req.body.text) || "").slice(0, 1200);

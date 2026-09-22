@@ -103,22 +103,28 @@
   <!-- VERDICT -->
   <div id="screen-verdict" class="hidden">
     <div class="panel judge-stage">
-      <img id="judge-img" src="djinnra-cutout.png" alt="Judge Djinn Ra">
-      <div class="winner-banner" id="winner-banner"></div>
-      <p class="muted" id="verdict-jury-line" style="margin:4px 0"></p>
-      <div class="verdict-text" id="verdict-text"></div>
-      <div class="voice-row">
-        <span class="lbl">🎙️ JUDGE'S VOICE</span>
-        <span id="voice-status" class="voice-status">…</span>
-        <button id="btn-mute" class="btn small ghost">Mute</button>
-        <button id="btn-replay" class="btn small ghost">↻ Replay verdict</button>
+      <div class="judge-verdict-grid">
+        <div class="judge-figure">
+          <img id="judge-img" src="djinnra-cutout.png" alt="Judge Djinn Ra">
+        </div>
+        <div class="judge-ruling">
+          <div class="winner-banner" id="winner-banner"></div>
+          <p class="muted" id="verdict-jury-line" style="margin:4px 0"></p>
+          <div class="verdict-text" id="verdict-text"></div>
+          <div class="voice-row">
+            <span class="lbl">🎙️ JUDGE'S VOICE</span>
+            <span id="voice-status" class="voice-status">…</span>
+            <button id="btn-mute" class="btn small ghost">Mute</button>
+            <button id="btn-replay" class="btn small ghost">↻ Replay verdict</button>
+          </div>
+          <div class="scoreboard">
+            <div class="score"><div class="n" id="score-p">0</div><div class="t">PLAINTIFF</div></div>
+            <div class="score"><div class="n" id="score-d">0</div><div class="t">DEFENDANT</div></div>
+          </div>
+          <button id="btn-next" class="btn mt">🏆 Crown the Winner →</button>
+          <button id="btn-end" class="btn ghost mt">End Game</button>
+        </div>
       </div>
-      <div class="scoreboard">
-        <div class="score"><div class="n" id="score-p">0</div><div class="t">PLAINTIFF</div></div>
-        <div class="score"><div class="n" id="score-d">0</div><div class="t">DEFENDANT</div></div>
-      </div>
-      <button id="btn-next" class="btn mt">🏆 Crown the Winner →</button>
-      <button id="btn-end" class="btn ghost mt">End Game</button>
     </div>
   </div>
 
@@ -403,6 +409,29 @@ const judgeImg = document.getElementById("judge-img");
 let judgeAudio = null;      // single persistent element (one MediaElementSource only)
 let audioCtx = null, analyser = null, talkRaf = null, voiceMode = "ai";
 
+/* Browsers block audio that starts without a user gesture — that's why the
+   judge stayed silent when the verdict arrived on its own. Unlock everything
+   on the first tap/click/keypress anywhere on the page. */
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  } catch (e) { /* audio not supported — the speech fallback still tries */ }
+  try {
+    if ("speechSynthesis" in window) {
+      speechSynthesis.cancel();
+      const primer = new SpeechSynthesisUtterance(" ");
+      primer.volume = 0;
+      speechSynthesis.speak(primer);
+    }
+  } catch (e) { /* ignore */ }
+}
+window.addEventListener("pointerdown", unlockAudio);
+window.addEventListener("keydown", unlockAudio);
+
 function stopTalking() {
   if (talkRaf) { cancelAnimationFrame(talkRaf); talkRaf = null; }
   if (judgeAudio) { judgeAudio.pause(); }
@@ -412,6 +441,7 @@ function stopTalking() {
 
 // Bounce the judge in time with his own voice — reads as talking.
 function talkLoop() {
+  if (!analyser) return; // no audio graph (very old browser) — judge still speaks
   const data = new Uint8Array(analyser.frequencyBinCount);
   const tick = () => {
     analyser.getByteTimeDomainData(data);
@@ -463,15 +493,22 @@ async function speak(text) {
     const url = URL.createObjectURL(await r.blob());
     if (!judgeAudio) {
       judgeAudio = new Audio();
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      judgeAudio.onended = stopTalking;
+    } else {
+      if (judgeAudio.src.startsWith("blob:")) URL.revokeObjectURL(judgeAudio.src);
+    }
+    // Reuse the gesture-unlocked context when we have one (creating a fresh
+    // AudioContext here would start suspended and stay silent).
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { audioCtx = null; }
+    }
+    if (audioCtx && !analyser) {
       const src = audioCtx.createMediaElementSource(judgeAudio);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
       src.connect(analyser);
       analyser.connect(audioCtx.destination);
-      judgeAudio.onended = stopTalking;
-    } else {
-      if (judgeAudio.src.startsWith("blob:")) URL.revokeObjectURL(judgeAudio.src);
     }
     voiceMode = "ai";
     voiceStatus.textContent = "🔥 AI judge voice";

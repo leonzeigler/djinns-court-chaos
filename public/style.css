@@ -162,6 +162,22 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
 @keyframes slidein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
 
 .judge-stage { text-align: center; }
+/* Verdict layout: the judge stays visible beside the ruling.
+   Long verdict text scrolls in its own box instead of pushing the judge off-screen. */
+.judge-verdict-grid {
+  display: flex; gap: 26px; align-items: flex-start;
+  max-width: 1120px; margin: 0 auto; text-align: left;
+}
+.judge-figure { flex: 0 0 auto; position: sticky; top: 14px; text-align: center; }
+.judge-figure img { width: min(340px, 30vw); }
+.judge-ruling { flex: 1 1 auto; min-width: 0; }
+.judge-ruling .winner-banner,
+.judge-ruling #verdict-jury-line { text-align: center; }
+@media (max-width: 760px) {
+  .judge-verdict-grid { flex-direction: column; align-items: center; }
+  .judge-figure { position: static; }
+  .judge-figure img { width: min(220px, 58vw); }
+}
 .judge-stage img {
   width: min(300px, 60vw);
   /* Frameless cutout: no border, no rounded box, no frame shadow.
@@ -211,6 +227,9 @@ label { display: block; color: var(--muted); font-size: 13px; margin: 12px 0 6px
   margin: 18px auto;
   max-width: 800px;
   border: 1px solid #4a3d18;
+  /* Long rulings scroll inside the box — the judge stays on screen. */
+  max-height: 38vh;
+  overflow-y: auto;
 }
 .winner-banner {
   font-size: clamp(24px, 6vw, 44px);
